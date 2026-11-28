@@ -15,12 +15,21 @@ import nextConfig from '../../next.config.mjs'
  */
 describe('next.config.mjs', () => {
   it('allows 127.0.0.1 as a dev origin', () => {
-    // Playwright drives the app at `http://127.0.0.1:3000`
+    // Playwright drives the app at `http://127.0.0.1:6001` (#285)
     // (`playwright.config.ts`, `use.baseURL`), and Next's built-in dev
     // allowlist covers only `localhost` / `**.localhost`. Without this entry
     // the dev server 403s its own `/_next` and `/__nextjs` endpoints for that
     // host.
     expect(nextConfig.allowedDevOrigins).toContain('127.0.0.1')
+  })
+
+  it('sets an explicit Partial Prefetching policy for Cache Components (#436)', () => {
+    // Unset behaves like `false` but logs a warning on every build under
+    // `cacheComponents`; the choice and its migration work are recorded in
+    // docs/ARCHITECTURE.md § Link prefetching. Flipping it is a decision,
+    // not a cleanup, so this pins the value rather than only "defined".
+    expect(nextConfig.cacheComponents).toBe(true)
+    expect(nextConfig.partialPrefetching).toBe(false)
   })
 
   it('keeps allowedDevOrigins a list of bare hostnames', () => {

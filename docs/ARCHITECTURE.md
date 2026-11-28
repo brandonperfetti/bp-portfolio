@@ -59,10 +59,67 @@ What a reader or editor can do with it, and which tests prove it, is
   stale-while-revalidate with a one-year stale window, which silently breaks
   "admin edits are live in seconds" (#118; pinned by
   `src/app/api/revalidate/route.test.ts`).
+- **A reader that populates another collection's document subscribes to that
+  collection's tag too** (#359, option A; Brandon). Visitor-facing reads run
+  with access control enforced (`overrideAccess: false`), so a relation to a
+  draft comes back as a bare id: a link field renders it as `'#'`
+  (`resolveCmsHref`) and a rich-text internal link as plain text
+  (`lexicalToBlocks`). The exceptions use `overrideAccess: true` and are
+  uncached: the draft-preview readers, where linking a draft is the point,
+  and `getGatedPostContent`, which asks for each link target's `_status` so a
+  draft still renders as text. The target's publish, unpublish or delete
+  purges only its own tag (`revalidatePage` purges `pages`, `revalidatePost`
+  purges `posts`). So the cached page readers that return blocks
+  (`getPageByPathDraftAware`, `getPageLayoutBySlug`) carry `posts`; the cached
+  post readers that return the body (`getPostBySlug`, `getPostByPath`,
+  `getPostLayoutBySlug`) carry `pages`; the consent reader carries `pages` and
+  `getCmsRedirects` both (#262). A reader whose cached value carries no link to
+  the other collection stays on its own tag: the path and slug lists,
+  `getAncestorPages`, `getCmsPageByPath` (page metadata), and the post
+  summaries, whose consumers read no page reference. The cost is one re-read of
+  each tagged entry after any write to the other collection; a shared "publish
+  state" tag (option B) is the alternative if that ever shows up as load.
+  `src/lib/cms/cacheTags.test.ts` pins both sides, so a new cross-collection
+  reader gets added there.
 - `/api/revalidate` (secret `CMS_REVALIDATE_SECRET`) is the manual escape
   hatch.
 - GitHub tech signals cache 6h under tag `tech-signals`
   (`src/lib/tech/githubSignals.ts`).
+
+## Link prefetching
+
+`next.config.mjs` sets `partialPrefetching: false` beside
+`cacheComponents: true` (#436), decided 2026-11-25 on Next 16.4.6.
+
+- **What it keeps.** Each `<Link>` that enters the viewport prefetches the
+  cached render of its own URL, the behavior the site has had since Cache
+  Components landed (#76). Leaving the option unset behaves the same but logs
+  a warning on every build; `false` states the choice and removes the warning
+  [source: next 16.4.6 `dist/server/config.js`; measured 2026-11-25 with
+  Next's `loadConfig` on this config, warning absent, and on a control copy
+  without the key, warning printed].
+- **Why not `true` yet.** With Partial Prefetching, a default `<Link>`
+  prefetches one App Shell per route: only the output that does not depend on
+  the URL. `/articles/[slug]` and the `[...segments]` catch-all await `params`
+  outside `<Suspense>` on purpose, so a 404, a #120/#130 redirect or the #153
+  placed-article 308 keeps a real HTTP status (#172), and neither has a
+  `loading.tsx`. Their App Shell would hold the layout and no body, so the
+  article or page a reader clicks would render after the click instead of
+  being prefetched before it [inference: verify by comparing the same
+  client-side navigations in a production build with the flag off and on].
+- **What it does not hold back.** No link in `src/` sets `prefetch={true}`
+  [measured 2026-11-25, `grep -rn prefetch src`], so there is no legacy full
+  prefetch to migrate; adoption is only the content-route question above.
+- **Adoption work.** Pick one route at a time (`export const prefetch =
+'partial'` lets a route adopt with the global flag off): either move the
+  `params` read behind `<Suspense>` without losing #172's status codes, or
+  keep the current shape and give the links to it `prefetch={true}`, which
+  resolves the cached URL-specific render ahead of the click at the cost of a
+  server invocation per visible link. Prove each with the same production
+  navigation before and after, then set the flag to `true`. Next's next major
+  turns Partial Prefetching on everywhere and removes the option, so this
+  work is due before that upgrade [source: next 16.4.6
+  `dist/docs/01-app/02-guides/adopting-partial-prefetching.md`].
 
 ## Environments
 

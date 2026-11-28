@@ -693,115 +693,150 @@ describe.skipIf(!connectionString)(
      *
      * Same leaf-first `try/finally` as the #150 case above.
      */
-    it('cascades a never-published parent’s move on its FIRST publish', async () => {
-      const created: { collection: 'pages' | 'posts'; id: number | string }[] =
-        []
-      const track = <T extends { id: number | string }>(
-        collection: 'pages' | 'posts',
-        doc: T,
-      ): T => {
-        created.unshift({ collection, id: doc.id })
-        return doc
-      }
-
-      try {
-        // NEVER published: created straight as a draft, so no row ever matches
-        // `_status: 'published'` for this id.
-        const section = track(
-          'pages',
-          await createFixturePage(payload, {
-            data: {
-              title: `${MARKER}-np`,
-              layout,
-              _status: 'draft',
-              slug: `${MARKER}-np`,
-            },
-          }),
-        )
-        expect(section.path).toBe(`${MARKER}-np`)
-
-        // Descendants at two depths, so the shallowest-first recomposition is
-        // exercised on this branch too. Drafts, because #180 refuses a
-        // published child under an unpublished parent — see this case's
-        // docblock for why that costs the case nothing.
-        const child = track(
-          'pages',
-          await mkDraftPage(`${MARKER}-np-child`, section.id),
-        )
-        expect(child.path).toBe(`${MARKER}-np/${MARKER}-np-child`)
-        const leaf = track(
-          'pages',
-          await mkDraftPage(`${MARKER}-np-leaf`, child.id),
-        )
-        expect(leaf.path).toBe(
-          `${MARKER}-np/${MARKER}-np-child/${MARKER}-np-leaf`,
-        )
-
-        // The rename arrives as a DRAFT save, exactly as the admin sends it.
-        await payload.update({
-          collection: 'pages',
-          id: section.id,
-          overrideAccess: true,
-          draft: true,
-          data: { slug: `${MARKER}-np-renamed`, slugLock: false },
-        })
-
-        // MEASURED, not assumed: the draft save left the main table alone, so
-        // the row still carries the prefix the descendants were composed from.
-        const mainAfterDraft = await payload.findByID({
-          collection: 'pages',
-          id: section.id,
-          overrideAccess: true,
-        })
-        expect(mainAfterDraft.path).toBe(`${MARKER}-np`)
-
-        // FIRST publish. The main row moves here, for the first time.
-        const published = await payload.update({
-          collection: 'pages',
-          id: section.id,
-          overrideAccess: true,
-          data: { _status: 'published' },
-        })
-        expect(published.path).toBe(`${MARKER}-np-renamed`)
-
-        const pathOf = async (
+    it.each(['first publish', 'draft main-row update'])(
+      'cascades a never-published parent’s move on %s',
+      async (moveOn) => {
+        const created: {
+          collection: 'pages' | 'posts'
+          id: number | string
+        }[] = []
+        const track = <T extends { id: number | string }>(
           collection: 'pages' | 'posts',
-          id: number | string,
-        ) =>
-          (await payload.findByID({ collection, id, overrideAccess: true }))
-            .path
+          doc: T,
+        ): T => {
+          created.unshift({ collection, id: doc.id })
+          return doc
+        }
 
-        // The STORED paths, read back. Without the cascade these are still
-        // `${MARKER}-np/…` and stay that way until each document's own next
-        // save.
-        expect(await pathOf('pages', child.id)).toBe(
-          `${MARKER}-np-renamed/${MARKER}-np-child`,
-        )
-        expect(await pathOf('pages', leaf.id)).toBe(
-          `${MARKER}-np-renamed/${MARKER}-np-child/${MARKER}-np-leaf`,
-        )
+        try {
+          // NEVER published: created straight as a draft, so no row ever matches
+          // `_status: 'published'` for this id.
+          const section = track(
+            'pages',
+            await createFixturePage(payload, {
+              data: {
+                title: `${MARKER}-np`,
+                layout,
+                _status: 'draft',
+                slug: `${MARKER}-np`,
+              },
+            }),
+          )
+          expect(section.path).toBe(`${MARKER}-np`)
 
-        // No redirect row for the parent itself, and that is correct: it was
-        // never served, so there is no old URL to send anywhere. The
-        // descendants' old URLs are the residual documented in `docs/PAYLOAD.md`.
-        const own = await payload.find({
-          collection: 'redirects',
-          depth: 0,
-          overrideAccess: true,
-          pagination: false,
-          where: { from: { equals: `/${MARKER}-np` } },
-        })
-        expect(own.totalDocs).toBe(0)
-      } finally {
-        for (const row of created) {
-          await payload.delete({
-            collection: row.collection,
-            where: { id: { equals: row.id } },
+          // Descendants at two depths, so the shallowest-first recomposition is
+          // exercised on this branch too. Drafts, because #180 refuses a
+          // published child under an unpublished parent — see this case's
+          // docblock for why that costs the case nothing.
+          const child = track(
+            'pages',
+            await mkDraftPage(`${MARKER}-np-child`, section.id),
+          )
+          expect(child.path).toBe(`${MARKER}-np/${MARKER}-np-child`)
+          const leaf = track(
+            'pages',
+            await mkDraftPage(`${MARKER}-np-leaf`, child.id),
+          )
+          expect(leaf.path).toBe(
+            `${MARKER}-np/${MARKER}-np-child/${MARKER}-np-leaf`,
+          )
+
+          // The rename arrives as a DRAFT save, exactly as the admin sends it.
+          await payload.update({
+            collection: 'pages',
+            id: section.id,
+            overrideAccess: true,
+            draft: true,
+            data: { slug: `${MARKER}-np-renamed`, slugLock: false },
+          })
+
+          // MEASURED, not assumed: the draft save left the main table alone, so
+          // the row still carries the prefix the descendants were composed from.
+          const mainAfterDraft = await payload.findByID({
+            collection: 'pages',
+            id: section.id,
             overrideAccess: true,
           })
+          expect(mainAfterDraft.path).toBe(`${MARKER}-np`)
+
+          if (moveOn === 'draft main-row update') {
+            // A regular Local API update persists the draft's path on the main
+            // row, before any publish. The descendant main rows must follow it.
+            const moved = await payload.update({
+              collection: 'pages',
+              id: section.id,
+              overrideAccess: true,
+              data: { slug: `${MARKER}-np-renamed`, slugLock: false },
+            })
+            expect(moved._status).toBe('draft')
+            expect(moved.path).toBe(`${MARKER}-np-renamed`)
+            for (const [id, path] of [
+              [child.id, `${MARKER}-np-renamed/${MARKER}-np-child`],
+              [
+                leaf.id,
+                `${MARKER}-np-renamed/${MARKER}-np-child/${MARKER}-np-leaf`,
+              ],
+            ] as const) {
+              const persisted = await payload.findByID({
+                collection: 'pages',
+                id,
+                overrideAccess: true,
+                draft: false,
+              })
+              expect(persisted.path).toBe(path)
+              expect(persisted._status).toBe('draft')
+            }
+          }
+
+          // Publish the draft with the renamed path.
+          const published = await payload.update({
+            collection: 'pages',
+            id: section.id,
+            overrideAccess: true,
+            data: { _status: 'published' },
+          })
+          expect(published.path).toBe(`${MARKER}-np-renamed`)
+
+          const pathOf = async (
+            collection: 'pages' | 'posts',
+            id: number | string,
+          ) =>
+            (await payload.findByID({ collection, id, overrideAccess: true }))
+              .path
+
+          // The STORED paths, read back. Without the cascade these are still
+          // `${MARKER}-np/…` and stay that way until each document's own next
+          // save.
+          expect(await pathOf('pages', child.id)).toBe(
+            `${MARKER}-np-renamed/${MARKER}-np-child`,
+          )
+          expect(await pathOf('pages', leaf.id)).toBe(
+            `${MARKER}-np-renamed/${MARKER}-np-child/${MARKER}-np-leaf`,
+          )
+
+          // No redirect row for the parent itself, and that is correct: it was
+          // never served, so there is no old URL to send anywhere. The
+          // descendants' old URLs are the residual documented in `docs/PAYLOAD.md`.
+          const own = await payload.find({
+            collection: 'redirects',
+            depth: 0,
+            overrideAccess: true,
+            pagination: false,
+            where: { from: { equals: `/${MARKER}-np` } },
+          })
+          expect(own.totalDocs).toBe(0)
+        } finally {
+          for (const row of created) {
+            await payload.delete({
+              collection: row.collection,
+              where: { id: { equals: row.id } },
+              overrideAccess: true,
+            })
+          }
         }
-      }
-    }, 180_000)
+      },
+      180_000,
+    )
 
     /**
      * The served-prefix invariant at publish (#180), on the real pipeline.
@@ -1091,6 +1126,339 @@ describe.skipIf(!connectionString)(
           await payload.delete({
             collection: row.collection,
             where: { id: { equals: row.id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
+
+    /**
+     * A Local-API draft save of a served section is a draft save (#197).
+     *
+     * @remarks The shape scripts, seeds and the MCP write tools send:
+     * `payload.update({ draft: true })` with no `req`, so `req.query` is empty
+     * and only the operation's own `draft` argument says "draft". Before #197
+     * the unpublish guard refused it as an unpublish. The same request without
+     * `draft` IS an unpublish and must still be refused, so both run here on one
+     * served subtree.
+     */
+    it('saves a Local-API draft of a published page with a published child, and still refuses its unpublish (#197)', async () => {
+      const created: (number | string)[] = []
+      try {
+        const section = await mkPage(`${MARKER}-ds`)
+        created.unshift(section.id)
+        const child = await mkPage(`${MARKER}-ds-child`, section.id)
+        created.unshift(child.id)
+
+        // (1) The draft save succeeds and writes a draft version only.
+        const drafted = await payload.update({
+          collection: 'pages',
+          id: section.id,
+          draft: true,
+          overrideAccess: true,
+          data: { title: `${MARKER}-ds edited` },
+        })
+        expect(drafted._status).toBe('draft')
+
+        const draftRead = await payload.findByID({
+          collection: 'pages',
+          id: section.id,
+          draft: true,
+          overrideAccess: true,
+        })
+        expect(draftRead.title).toBe(`${MARKER}-ds edited`)
+
+        // The main row is untouched: still published, still the old title, and
+        // the child is still served beneath it.
+        const served = await payload.find({
+          collection: 'pages',
+          overrideAccess: true,
+          pagination: false,
+          where: { id: { in: [section.id, child.id] } },
+        })
+        const byId = new Map(served.docs.map((doc) => [doc.id, doc]))
+        expect(byId.get(section.id)?._status).toBe('published')
+        expect(byId.get(section.id)?.title).toBe(`${MARKER}-ds`)
+        expect(byId.get(child.id)?._status).toBe('published')
+
+        // (2) The unpublish, same caller shape minus `draft`, is still refused,
+        // and the Local-API caller is told the draft form.
+        await expect(
+          payload.update({
+            collection: 'pages',
+            id: section.id,
+            overrideAccess: true,
+            data: { _status: 'draft' },
+          }),
+        ).rejects.toThrow(
+          /still has published documents under it.*pass `draft: true`/,
+        )
+      } finally {
+        for (const id of created) {
+          await payload.delete({
+            collection: 'pages',
+            where: { id: { equals: id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
+
+    /**
+     * A Local-API draft RENAME of a served section is refused, and moves
+     * nothing (#197 review, P1; option A).
+     *
+     * @remarks The capture and the cascade cannot see a Local-API `draft`
+     * flag. Had the guard let this draft through, the capture would stash the
+     * old path, `cascadePagePaths` would see the draft's new path and update
+     * each child with no `draft` flag, and a child carrying a newer draft of
+     * its own would have that draft written to its main row. Option A refuses
+     * the move instead.
+     */
+    it('refuses a Local-API draft rename of a section with a served child, and leaves the child alone (#197)', async () => {
+      const created: (number | string)[] = []
+      try {
+        const section = await mkPage(`${MARKER}-dr`)
+        created.unshift(section.id)
+        const child = await mkPage(`${MARKER}-dr-child`, section.id)
+        created.unshift(child.id)
+
+        // The child has unpublished edits waiting: a newer draft version.
+        await payload.update({
+          collection: 'pages',
+          id: child.id,
+          draft: true,
+          overrideAccess: true,
+          data: { title: `${MARKER}-dr-child pending` },
+        })
+
+        // The parent is renamed in a draft. `slugLock: false` is the explicit
+        // unlock a published slug needs (`enforceSlugFreeze`); without it the
+        // slug stays frozen and the draft would not move the page at all.
+        await expect(
+          payload.update({
+            collection: 'pages',
+            id: section.id,
+            draft: true,
+            overrideAccess: true,
+            data: { slug: `${MARKER}-dr-renamed`, slugLock: false },
+          }),
+        ).rejects.toThrow(/cannot change its slug or parent/)
+
+        const served = await payload.find({
+          collection: 'pages',
+          overrideAccess: true,
+          pagination: false,
+          where: { id: { in: [section.id, child.id] } },
+        })
+        const byId = new Map(served.docs.map((doc) => [doc.id, doc]))
+        expect(byId.get(section.id)?._status).toBe('published')
+        expect(byId.get(section.id)?.path).toBe(`${MARKER}-dr`)
+        expect(byId.get(child.id)?._status).toBe('published')
+        expect(byId.get(child.id)?.title).toBe(`${MARKER}-dr-child`)
+        expect(byId.get(child.id)?.path).toBe(`${MARKER}-dr/${MARKER}-dr-child`)
+      } finally {
+        for (const id of created) {
+          await payload.delete({
+            collection: 'pages',
+            where: { id: { equals: id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
+
+    /**
+     * One request reused for several Local-API writes (#197 review, R1).
+     *
+     * @remarks A script that passes its own `req` runs every operation on the
+     * same `req.context`. Payload names a by-id update `'update'` going into
+     * `beforeOperation` and `'updateByID'` coming out of `afterOperation`
+     * (`updateByID.js`), so a release hook that only knew `'update'` left the
+     * first save's entry behind, and the second draft save read as an overlap
+     * and was refused. This drives the real pipeline: two draft saves, then an
+     * unpublish, all on one request.
+     */
+    it('allows repeated Local-API draft saves on one reused request, and still refuses its unpublish (#197)', async () => {
+      const created: (number | string)[] = []
+      try {
+        const section = await mkPage(`${MARKER}-rq`)
+        created.unshift(section.id)
+        const child = await mkPage(`${MARKER}-rq-child`, section.id)
+        created.unshift(child.id)
+
+        const { createLocalReq } = await import('payload')
+        const req = await createLocalReq({}, payload)
+
+        for (const title of [`${MARKER}-rq one`, `${MARKER}-rq two`]) {
+          const drafted = await payload.update({
+            collection: 'pages',
+            id: section.id,
+            draft: true,
+            overrideAccess: true,
+            req,
+            data: { title },
+          })
+          expect(drafted._status).toBe('draft')
+        }
+
+        await expect(
+          payload.update({
+            collection: 'pages',
+            id: section.id,
+            overrideAccess: true,
+            req,
+            data: { _status: 'draft' },
+          }),
+        ).rejects.toThrow(/still has published documents under it/)
+
+        const served = await payload.findByID({
+          collection: 'pages',
+          id: section.id,
+          overrideAccess: true,
+        })
+        expect(served._status).toBe('published')
+        expect(served.title).toBe(`${MARKER}-rq`)
+      } finally {
+        for (const id of created) {
+          await payload.delete({
+            collection: 'pages',
+            where: { id: { equals: id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
+
+    /**
+     * A reused request cannot turn a later Local-API draft rename into a
+     * cascade (#197 review, R3).
+     *
+     * @remarks A completed main-row update leaves `previousStoredPaths` on
+     * `req.context`. When the capture skipped a later draft save, that stale
+     * stash met the draft's new path in `cascadePagePaths`, which rewrote each
+     * child with no `draft` flag and published a child's pending draft. Under
+     * option A the draft rename is refused before any of that runs.
+     */
+    it('refuses a draft rename after a completed main-row update on one reused request, and keeps the child served (#197)', async () => {
+      const created: (number | string)[] = []
+      try {
+        const section = await mkPage(`${MARKER}-rr`)
+        created.unshift(section.id)
+        const child = await mkPage(`${MARKER}-rr-child`, section.id)
+        created.unshift(child.id)
+
+        // The child has unpublished edits waiting: a newer draft version.
+        await payload.update({
+          collection: 'pages',
+          id: child.id,
+          draft: true,
+          overrideAccess: true,
+          data: { title: `${MARKER}-rr-child pending` },
+        })
+
+        const { createLocalReq } = await import('payload')
+        const req = await createLocalReq({}, payload)
+
+        // (1) A completed main-row update of the parent, path unchanged.
+        await payload.update({
+          collection: 'pages',
+          id: section.id,
+          overrideAccess: true,
+          req,
+          data: { title: `${MARKER}-rr live edit` },
+        })
+
+        // (2) A draft rename on the same request.
+        await expect(
+          payload.update({
+            collection: 'pages',
+            id: section.id,
+            draft: true,
+            overrideAccess: true,
+            req,
+            data: { slug: `${MARKER}-rr-renamed`, slugLock: false },
+          }),
+        ).rejects.toThrow(/cannot change its slug or parent/)
+
+        const served = await payload.find({
+          collection: 'pages',
+          overrideAccess: true,
+          pagination: false,
+          where: { id: { in: [section.id, child.id] } },
+        })
+        const byId = new Map(served.docs.map((doc) => [doc.id, doc]))
+        expect(byId.get(section.id)?.path).toBe(`${MARKER}-rr`)
+        expect(byId.get(child.id)?._status).toBe('published')
+        expect(byId.get(child.id)?.title).toBe(`${MARKER}-rr-child`)
+        expect(byId.get(child.id)?.path).toBe(`${MARKER}-rr/${MARKER}-rr-child`)
+      } finally {
+        for (const id of created) {
+          await payload.delete({
+            collection: 'pages',
+            where: { id: { equals: id } },
+            overrideAccess: true,
+          })
+        }
+      }
+    }, 180_000)
+
+    /**
+     * After a real move on a reused request, a Local-API draft save that does
+     * not move the page cascades nothing (#197 review, R3).
+     *
+     * @remarks The published rename stashes the old path and cascades, as it
+     * should. The capture rewrites that stash on the next write, so the draft
+     * save that follows compares its own unchanged path and leaves the
+     * subtree alone: the child is not written a second time.
+     */
+    it('does not cascade a non-moving Local-API draft that follows a published move on one reused request (#197)', async () => {
+      const created: (number | string)[] = []
+      try {
+        const section = await mkPage(`${MARKER}-mv2`)
+        created.unshift(section.id)
+        const child = await mkPage(`${MARKER}-mv2-child`, section.id)
+        created.unshift(child.id)
+
+        const { createLocalReq } = await import('payload')
+        const req = await createLocalReq({}, payload)
+
+        await payload.update({
+          collection: 'pages',
+          id: section.id,
+          overrideAccess: true,
+          req,
+          data: { slug: `${MARKER}-mv2-moved`, slugLock: false },
+        })
+        const moved = await payload.findByID({
+          collection: 'pages',
+          id: child.id,
+          overrideAccess: true,
+        })
+        expect(moved.path).toBe(`${MARKER}-mv2-moved/${MARKER}-mv2-child`)
+
+        const drafted = await payload.update({
+          collection: 'pages',
+          id: section.id,
+          draft: true,
+          overrideAccess: true,
+          req,
+          data: { title: `${MARKER}-mv2 draft edit` },
+        })
+        expect(drafted._status).toBe('draft')
+
+        const after = await payload.findByID({
+          collection: 'pages',
+          id: child.id,
+          overrideAccess: true,
+        })
+        expect(after.updatedAt).toBe(moved.updatedAt)
+        expect(after.path).toBe(moved.path)
+      } finally {
+        for (const id of created) {
+          await payload.delete({
+            collection: 'pages',
+            where: { id: { equals: id } },
             overrideAccess: true,
           })
         }

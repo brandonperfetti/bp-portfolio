@@ -97,9 +97,9 @@ describe('ProseBlockComponent', () => {
     const prose = proseWrapper(container)
 
     expect(prose).toHaveClass('prose', 'dark:prose-invert')
-    // No width override: prose carries no max-width cap of its own here (see
-    // Prose/Component.tsx), so the block fills whatever its host gives it —
-    // matching the article body, not a measure either one caps at.
+    // No width class: the 65ch measure comes from `prose` itself
+    // (`typography.ts`, #196), the same cap the article body gets, so the block
+    // adds no `max-w-*` of its own.
     expect(prose.className).not.toContain('max-w-')
   })
 

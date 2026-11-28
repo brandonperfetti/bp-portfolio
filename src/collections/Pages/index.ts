@@ -15,7 +15,15 @@ import { pageBuilderBlocks } from '@/blocks/library'
 import { SHARE_TARGET_OPTIONS } from '@/globals/SiteSettings'
 import { hero } from '@/heros/config'
 import { capturePublishedSlug } from '@/hooks/capturePublishedSlug'
+import {
+  deleteCorvusEmbeddings,
+  refreshCorvusEmbeddings,
+} from '@/hooks/corvusEmbeddings'
 import { createPathRedirect } from '@/hooks/createPathRedirect'
+import {
+  recordDraftSaveIntent,
+  releaseDraftSaveIntent,
+} from '@/hooks/draftSaveIntent'
 import { populatePublishedAt } from '@/hooks/populatePublishedAt'
 import { generatePreviewPath } from '@/utilities/generatePreviewPath'
 import {
@@ -239,10 +247,25 @@ export const Pages: CollectionConfig = {
     ...slugField(),
   ],
   hooks: {
-    // `cascadePagePaths` last: it recomputes the subtree beneath a moved page,
-    // and it must run after the redirect row for the page's OWN old path has
-    // landed (#150).
-    afterChange: [revalidatePage, createPathRedirect, cascadePagePaths],
+    // `cascadePagePaths` after the redirect: it recomputes the subtree
+    // beneath a moved page, and it must run after the redirect row for the
+    // page's OWN old path has landed (#150).
+    // Corvus refreshes the committed page and its moved descendants after
+    // Payload's transaction succeeds (#462). A rolled-back move leaves
+    // existing citation paths intact.
+    afterChange: [
+      revalidatePage,
+      createPathRedirect,
+      cascadePagePaths,
+      refreshCorvusEmbeddings('pages'),
+    ],
+    // Carry each update's own `draft` argument to the unpublish guard below,
+    // the one thing `beforeChange` is never handed (#197): without it a
+    // Local-API draft save of a served section reads as an unpublish. Only that
+    // guard reads it. Released after the operation; see
+    // `src/hooks/draftSaveIntent.ts`.
+    beforeOperation: [recordDraftSaveIntent],
+    afterOperation: [releaseDraftSaveIntent],
     // `validatePageHierarchy` rejects an unservable placement before
     // `computePagePath` ever stores a path — the guard runs in `beforeValidate`,
     // the computation in `beforeChange`, so the stored `path` is always one the
@@ -265,7 +288,7 @@ export const Pages: CollectionConfig = {
       capturePublishedSlug,
       computePagePath,
     ],
-    afterDelete: [revalidateDelete],
+    afterDelete: [revalidateDelete, deleteCorvusEmbeddings('pages')],
   },
   versions: {
     drafts: {

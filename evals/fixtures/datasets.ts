@@ -63,9 +63,26 @@ export const SITE_FACT_CASES: EvalCase[] = [
       'Brandon currently works at "Brytecore" as a "Senior Frontend Engineer", a role that began in "2024".',
   },
   {
+    // #208: the Strapi CMS behind each tenant is on the `/work/brytecore`
+    // Page and in no other fixture, so this passes only through `chunkPage`.
+    input:
+      'What headless CMS powers each Brytecore tenant site, and what feeds its content into each app?',
+    expected:
+      'Each tenant site runs on its own "Strapi" headless CMS, and a "GraphQL" layer feeds its content into each app.',
+  },
+  {
     input: 'What role did Brandon hold at Lone Wolf Technologies?',
     expected:
       'At "Lone Wolf Technologies" he was a "Software Engineer" and "Technical PM", from "2020" until "2023".',
+  },
+  {
+    // #236: declined on staging for lack of grounding (2026-09-15) — the
+    // roles embedded as bare labels and lost to project and repo passages.
+    // Each company is its own literal, so a partial list scores partial.
+    input:
+      "Tell me about Brandon's work history and the companies he's worked at.",
+    expected:
+      'His work history lists "Brytecore", "Freelance", "Lone Wolf Technologies" and "W+R Studios".',
   },
   {
     input: 'What is the Top Timelines project, and where can I find it?',

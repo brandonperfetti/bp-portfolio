@@ -163,6 +163,7 @@ type Descendant = {
   id: number | string
   /** The stored path the document had BEFORE the move. */
   path: string
+  status: unknown
 }
 
 /**
@@ -207,14 +208,18 @@ const readSubtree = async (
       overrideAccess: true,
       pagination: false,
       req,
-      select: { path: true },
+      select: { path: true, _status: true },
       where: { path: { like: `${prefix}/` } },
     })
-    for (const doc of docs as Array<{ id?: unknown; path?: unknown }>) {
+    for (const doc of docs as Array<{
+      id?: unknown
+      path?: unknown
+      _status?: unknown
+    }>) {
       const path = typeof doc.path === 'string' ? doc.path : ''
       if (!path.startsWith(`${prefix}/`)) continue
       if (typeof doc.id !== 'number' && typeof doc.id !== 'string') continue
-      found.push({ collection, id: doc.id, path })
+      found.push({ collection, id: doc.id, path, status: doc._status })
     }
   }
 
@@ -233,9 +238,10 @@ const readSubtree = async (
  * @remarks **What it does NOT do: write one redirect row per descendant.**
  * Inbound coverage for the subtree is one `matchDescendants` prefix row on the
  * moved page itself (D4, Brandon 2026-09-02) — O(1) rows per move rather than
- * O(subtree), which matters because `getCmsRedirects` reads at most
- * `REDIRECT_LIMIT = 500` rows and a handful of reorganisations on a site with a
- * few hundred articles walks toward that ceiling. So each descendant update
+ * O(subtree), which matters because `getCmsRedirects` reads the whole table
+ * into memory, past `REDIRECT_SCALE_THRESHOLD = 500` rows that design wants a
+ * keyed lookup (#256), and a handful of reorganisations on a site with a few
+ * hundred articles walks toward it. So each descendant update
  * carries `disableSlugRedirect: true`: without it every descendant would write
  * its own row and the prefix row would be decoration.
  *
@@ -288,29 +294,16 @@ const readSubtree = async (
  * is why this hook's precondition is "the page moved", not "the page was
  * live".
  *
- * **What that fallback costs, stated rather than discovered later.** It widens
- * the Local-API residual `isDraftSaveRequest` already documents — Payload's
- * `createLocalReq` does not mirror the Local API's own `draft` option into
- * `req.query`, so a `payload.update({ draft: true })` is not recognised as a
- * draft save and the capture runs anyway. For a published parent that residual
- * was one wasted `find`; with the fallback it now also reaches NEVER-published
- * parents, and for both it means this cascade fires on the draft save as well
- * as on the publish. `[measured]` the new
- * `evals/pages-hierarchy-integration.test.ts` case logs `Subtree moved` twice.
- * The extra pass is waste, not corruption: descendants recompute from the
- * parent's MAIN row, which the draft save did not touch, so every path is
- * rewritten to the value it already had. The admin path is unaffected — its
- * autosave and "Save draft" are REST and carry `draft=true` in the query
- * string, so they return before any of this. A caller that wants the fast path
- * can pass `req: { query: { draft: 'true' } }`.
+ * **Version-only saves leave descendant paths alone.** A draft result can
+ * represent an update to the never-published main row or a version-only
+ * save. When that result carries a path change, confirm the new path is in
+ * the main row before moving its descendants. Draft main-row moves require
+ * draft descendants, and each write explicitly keeps its draft status.
+ * Publishing an existing subtree with pending descendant edits is #443.
  *
- * **Failure posture is deliberately asymmetric, and different from the redirect
- * writer's.** `createPathRedirect` swallows its own failure because a missing
- * redirect row must never fail an editor's publish. A half-cascaded subtree is
- * not a missing redirect, it is a set of documents whose stored paths disagree
- * with where they are served — so these writes are NOT wrapped: they run on the
- * caller's transaction and are allowed to roll the move back. A move that
- * cannot take its children with it should not happen at all.
+ * **Failure posture.** The cascade runs on the caller's transaction. A
+ * descendant write error rolls back the move. The redirect hook also stops
+ * the move if its error already rolled back the shared transaction.
  *
  * **That asymmetry is about the WRITES, and it never covered the purge (#156).**
  * The two failures are not the same event and must not share a posture. A
@@ -347,8 +340,22 @@ export const cascadePagePaths: CollectionAfterChangeHook<Page> = async ({
     typeof doc.path === 'string' && doc.path.length > 0 ? doc.path : null
   if (!oldPath || !newPath || oldPath === newPath) return doc
 
+  const draftMove = doc._status !== 'published'
+  if (draftMove) {
+    const main = (await req.payload.db.findOne({
+      collection: 'pages',
+      where: { id: { equals: doc.id } },
+      select: { path: true, _status: true },
+      req,
+    })) as Pick<Page, 'path' | '_status'> | null
+    if (main?.path !== newPath || main._status !== 'draft') return doc
+  }
+
   const descendants = await readSubtree(req, oldPath)
   if (descendants.length === 0) return doc
+  if (draftMove && descendants.some(({ status }) => status !== 'draft')) {
+    throw new APIError('A draft move can only move draft descendants.', 400)
+  }
 
   for (const descendant of descendants) {
     await req.payload.update({
@@ -362,8 +369,8 @@ export const cascadePagePaths: CollectionAfterChangeHook<Page> = async ({
         disableRevalidate: context?.disableRevalidate === true,
         disableSlugRedirect: true,
       },
-      // EMPTY, deliberately — see "What this hook does not compute" above.
-      data: {},
+      // Let beforeChange recompute the path and keep draft moves unpublished.
+      data: draftMove ? { _status: 'draft' } : {},
       id: descendant.id,
       overrideAccess: true,
       req,

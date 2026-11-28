@@ -12,6 +12,69 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
+## v2026.11.28
+
+Automatic Analytics grants now stay in memory, and the site improves
+CMS reads, article navigation and Corvus context.
+Release PR [#486](https://github.com/brandonperfetti/bp-portfolio/pull/486) ·
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.28).
+
+**Visitors**
+
+- Automatic Analytics grants in regions that do not ask are now held in
+  memory. Explicit cookie choices still persist. The release removes older
+  stored automatic grants that match the recorded marker and grant shape
+  (#375, #478, #484).
+- Forms load Turnstile on first focus. The cookie dialog's updated
+  subtitle names the services that load independently of Analytics. The
+  production subtitle edit follows deployment of the #479 migration.
+  The lead article cover loads
+  eagerly, prose measures at most 65ch, and lighter-theme link and badge
+  colours use updated contrast tokens (#477, #479, #469, #482, #466).
+- Explorer filters follow links to the current URL. Corvus can name its
+  host page and retrieve published page text and owner-written summaries
+  of private repositories (#453, #460, #463, #465). Corvus refreshes only
+  committed content, so a rolled-back publish or page move cannot introduce
+  new text or citations (#462).
+
+**CMS operators and MCP users**
+
+- Full-list reads return all matching CMS rows. Publish-state changes
+  refresh dependent cached reads, and non-moving drafts can be saved
+  without tripping the unpublish guard (#441, #450, #467).
+- The cover pilot uses the approved imagery profile. Cover history
+  records the GPT Image 2 cover used for post 62 (#439, #474).
+- Operators can run the REST and MCP publish-to-sitemap freshness probe.
+  Both modes passed on staging. Production execution remains a separate
+  owner decision (#473, #485).
+
+**Developers**
+
+- pnpm is pinned to 12.16.1 and local servers use ports 6001–6029.
+  Syntax highlighting now uses refractor 5, and Partial Prefetching is
+  explicitly disabled while the current behavior is retained
+  (#472, #447, #471, #440).
+- The Corvus OpenAI fallback is now `gpt-5.6-luna` when
+  `AI_CHAT_MODEL` is unset (#457).
+- The cut adds the read-only CMS Domain Agent and tightens several
+  consent, explorer and integration test fixtures (#459, #442, #444,
+  #445, #448, #449).
+
+**Known limits.** A prefetched link can use the old region until a request
+reaches the server. The owner accepted that window in #484. Browser Sentry
+redaction, the shared Blob risk, freshness-probe refinements and private
+repo metadata remain tracked in #480, #452, #485 and #470.
+Production has an `AI_CHAT_MODEL` setting. The effective model still
+needs confirmation after deploy (#238).
+
+**Consent verification before release.** Checks 4 and 6 passed on staging
+at `e7dc8e3d`. Check 6 used a simulated old browser record. Checks 1, 2, 3
+and 5 passed on the same runtime in a local production build with simulated
+regions and the real Google tag. The browser intercepted measurement requests.
+Brandon accepted the combined evidence. Google Analytics is configured only
+for production, so live staging Analytics remains unverified. Production
+smoke checks follow the merge.
+
 ## v2026.11.24.1
 
 This release ships the GitHub authentication code behind its server flag and

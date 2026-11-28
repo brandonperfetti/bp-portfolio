@@ -1,8 +1,9 @@
-# pnpm settings (pnpm 11 reads these from pnpm-workspace.yaml, not package.json)
+# pnpm settings (pnpm 12 reads these from pnpm-workspace.yaml, not package.json).
+# pnpm 12 fails a command on a key it does not recognize here, since the
+# packageManager pin is honored, so a misspelled setting cannot sit inert.
 packages:
   - '.'
 overrides:
-  prismjs: 1.30.0
   '@types/react': 19.2.14
   '@types/react-dom': 19.2.3
   # Security advisories (wave-1 post-launch prod-health, #4) — patch/minor
@@ -108,8 +109,9 @@ allowBuilds:
   unrs-resolver: true
 # Release-age gate (#222, 2026-09-26): pnpm refuses to resolve any version
 # published less than this many MINUTES ago (1440 = 1 day). It applies when a
-# version is resolved (add/update/an install that re-resolves), not to a
-# frozen-lockfile install of versions already locked. Before 2026-09-26 the
+# version is resolved (add/update/an install that re-resolves), and every
+# install, frozen-lockfile included, also checks the versions already locked
+# against it (docs/DEPENDENCIES.md § Release-age gate). Before 2026-09-26 the
 # key was absent and the exclude list below guarded nothing. An entry below is
 # a deliberate, documented exception — add one only with a reason (e.g. a
 # same-day security patch), never to silence the gate.

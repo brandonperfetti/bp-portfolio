@@ -12,6 +12,7 @@ import {
 } from '../src/lib/ai/embeddingsStore'
 import { getEmbeddingModelId } from '../src/lib/ai/embeddings'
 import { refreshTechStackSummary } from '../src/lib/ai/techStackSummarySync'
+import { guardEmbeddingSource } from '../src/lib/ai/embeddingSourceGuard'
 import { canDropOrphans, orphanDeleteBounds } from './lib/orphan-guard.mjs'
 
 /**
@@ -132,10 +133,12 @@ async function run(): Promise<void> {
       // unambiguously to the next reader.
       limit: 0,
       pagination: false,
-      // Posts are drafts-enabled: ask for the published view explicitly so a
-      // doc with an in-flight draft is embedded as READERS see it, never as
-      // its unpublished draft reads.
-      ...(collection === 'posts' ? { draft: false } : {}),
+      // Posts and Pages are drafts-enabled: ask for the published view
+      // explicitly so a doc with an in-flight draft is embedded as READERS see
+      // it, never as its unpublished draft reads.
+      ...(collection === 'posts' || collection === 'pages'
+        ? { draft: false }
+        : {}),
       overrideAccess: true,
     })
 
@@ -147,7 +150,10 @@ async function run(): Promise<void> {
       seenIds.push(docId)
       try {
         const outcome = await syncDocumentEmbeddings({
-          db,
+          db:
+            collection === 'pages' || collection === 'posts'
+              ? guardEmbeddingSource(payload.db.drizzle, collection, doc)
+              : db,
           collection: collection as CorvusCollectionSlug,
           doc,
         })

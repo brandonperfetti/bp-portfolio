@@ -72,9 +72,11 @@ Payload is the single source of truth for site content. Admin at `/admin`
   agent's name renders as an `h2` in both host contexts, so a page hosting the
   block keeps exactly one `<h1>`. `starterPrompt` **pre-fills the composer and
   nothing else** — it is the visitor's editable draft, it is sent only when they
-  press send, and it travels as a `user` message; `/api/ai/chat`'s body schema
-  is still `{ messages }` and phase 1 does not touch it (page-context grounding
-  is phase 2). The select carries an explicit `enumName`
+  press send, and it travels as a `user` message. **Phase 2** (`[2026-11-25]`)
+  gives the block its page: it sends the host document (`hostDoc`, a
+  `{ collection, id }` reference) with each turn, and the server names that page
+  in the prompt from the CMS (`docs/AI.md` § The host page). Nothing about it is
+  an editor setting. The select carries an explicit `enumName`
   (`enum_corvus_chat_variant`) for the reason `ArticlesArchive/config.ts`
   records. Storage: four tables plus one enum
   (`20260911_152336_issue_217_corvus_chat_block`), the same four-table shape
@@ -173,10 +175,15 @@ seed, test or MCP write.
   save** and will take its non-draft branch. The admin UI and REST both carry
   `?draft=true` and are unaffected — this bites scripts, seeds, tests and MCP
   writes. A Local-API caller that needs a hook to see the draft passes it
-  explicitly: `req: { query: { draft: 'true' } }`. Worked cases: the `cascadePagePaths` docblock in
-  `src/collections/Pages/hooks/pageHierarchy.ts` and the `createLocalReq` note
-  in `src/collections/Pages/hooks/servedPrefix.ts`; #197 for the live defect.
-  `[source: payload 3.88.0]`
+  explicitly: `req: { query: { draft: 'true' } }`, or the hook reads the
+  operation's own `draft` argument in `beforeOperation`, the one hook that runs
+  before `beforeChange` and is handed it. Its `afterOperation` release must
+  accept `'updateByID'`: Payload names a by-id update `'update'` going in and
+  `'updateByID'` coming out. Worked cases: the `cascadePagePaths` docblock in
+  `src/collections/Pages/hooks/pageHierarchy.ts`, and `recordDraftSaveIntent`
+  in `src/hooks/draftSaveIntent.ts`, which the Pages unpublish guard reads to
+  let a Local-API draft save through when it does not move the page (#197).
+  `[source: payload 3.88.0; beforeOperation/afterOperation at 3.93.0]`
 
 ## Slugs and paths
 
@@ -541,23 +548,23 @@ level: a **Local-API explicit draft save** reads as an unpublish, because
 For the capture itself that is one extra lookup and one redundant purge of a
 still-live path — never a lost purge, never a lost write.
 
-**Since #180 the same residual IS a lost write one hook over.** The served-prefix
-unpublish guard (`refuseUnpublishWithServedDescendants`) reads the identical
-predicate, so a `payload.update({ draft: true })` on a **published** page that
-has published descendants is REFUSED, though it would have unpublished nothing.
-That is a false refusal — a step up in severity from a wasted read — and the
-sentence above no longer covers every consumer of the residual. It is
-unreachable from the admin (autosave and "Save draft" are REST and carry
-`draft=true`) and unreached in this repo. That guard's docblock is the single
-home for the measurement, for the `req: { query: { draft: 'true' } }` escape
-hatch, and for where the follow-up should start: `createLocalReq` sets
-`req.payloadAPI` fifteen lines before the `req.query` line the residual rests
-on, so the fix does not need the caller sweep the ticket implies — but
-`payloadAPI` alone cannot separate a Local-API draft save from a Local-API
-unpublish, which is the design choice the ticket has to carry.
-`evals/slug-redirect-integration.test.ts` proves the capture behaviour end to end
-and pins the autosave read count; the false refusal is pinned in both directions
-by `src/collections/Pages/hooks/servedPrefix.test.ts`.
+**The served-prefix unpublish guard does not share that residual (#197,
+option A).** `refuseUnpublishWithServedDescendants` also reads the query-only
+predicate first, but for a query-free write it additionally reads the
+operation's own `draft` argument, which `recordDraftSaveIntent`
+(`src/hooks/draftSaveIntent.ts`) carries from `beforeOperation`. A
+`payload.update({ draft: true })` on a published page with published
+descendants therefore saves its draft when it keeps the page's slug and parent.
+It is refused when it would move the page, because the capture and the cascade
+above stay query-only and would otherwise treat the draft as a move. A
+query-free write without `draft` is still an unpublish and still refused. The
+guard's docblock holds the contract and the intent module's docblock the
+fail-closed rules. `src/collections/Pages/hooks/servedPrefix.test.ts` and the
+#197 cases in `evals/pages-hierarchy-integration.test.ts` pin both directions.
+Two things are left as they were: the query-flag escape hatch skips the guard's
+new checks, and a real publish's cascade loads each child's latest version
+(#443). `evals/slug-redirect-integration.test.ts` proves the capture behaviour
+end to end and pins the autosave read count.
 
 **A revalidation failure never fails the write (#135, #156).** Payload runs
 `afterChange`/`afterDelete` collection hooks **inside the operation's
@@ -621,13 +628,15 @@ statement belongs in it — `redirects` was swept by the #72 backfill and its RL
 is already on. `scripts/check-migrations-rls.mjs` agrees: the migration creates
 no table, so it carries no obligation.
 
-Known limits: the reader reads at most 500 rows — and since #178 it may walk
-that one list up to six times per request (the initial pass plus five hops),
-resolving each capture-time rewrite through it (`docs/NAVIGATION.md` §How many
-moves a URL survives). The 500-row ceiling is also what makes the resolver's
-fall-back-rather-than-serve-the-snapshot rule load-bearing: a row past the
-ceiling is a missing intermediate hop, and serving the capture-time spelling
-there would answer a permanent redirect to a dead URL.
+Known limits: the reader reads the whole table into memory — and since #178 it
+may walk that one list up to six times per request (the initial pass plus five
+hops), resolving each capture-time rewrite through it (`docs/NAVIGATION.md`
+§How many moves a URL survives). Past `REDIRECT_SCALE_THRESHOLD` (500 rows) it
+logs a warning that a keyed lookup is due; it drops no row (#256, which removed
+the old 500-row read cap). The resolver's
+fall-back-rather-than-serve-the-snapshot rule is still load-bearing: an
+intermediate row an editor deleted is a missing hop, and serving the
+capture-time spelling there would answer a permanent redirect to a dead URL.
 
 ## Plugins (`src/plugins/index.ts`)
 

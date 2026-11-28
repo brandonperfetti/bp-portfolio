@@ -72,7 +72,9 @@ export function getStores(): GuardrailStores {
 }
 
 function getSiteHosts() {
-  const hosts = new Set(['localhost', 'localhost:3000', '127.0.0.1'])
+  // `localhost:6002` is `pnpm dev`'s default (#285); same-origin requests on
+  // any other port are accepted below through the serving host.
+  const hosts = new Set(['localhost', 'localhost:6002', '127.0.0.1'])
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
   if (siteUrl) {
     try {

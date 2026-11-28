@@ -147,13 +147,15 @@ import { containRevalidation } from '@/hooks/containRevalidation'
  * document's own paths.** The transition matrix is pinned in
  * `revalidatePost.test.ts` and `revalidatePage.test.ts`.
  *
- * A failure here must never fail the editor's publish, so the write is wrapped
- * and logged. The `redirects` cache tag is purged for free: creating the row
- * runs the redirects collection's own `revalidateRedirects` hook.
+ * A redirect failure is logged and contained while the publish can still
+ * commit. If Payload rolled back the shared transaction, rethrow before any
+ * downstream hook can write against the rolled-back document. Creating the row
+ * runs the redirects collection's own `revalidateRedirects` hook, which
+ * purges the `redirects` cache tag.
  *
  * **Two different containments, and they are not interchangeable (#135, #156).**
- * The `try` around the row write exists so a database failure does not fail the
- * publish. The purge inside it goes through `containRevalidation` for a
+ * The `try` around the row write contains recoverable redirect errors.
+ * The purge inside it goes through `containRevalidation` for a
  * different reason: it runs AFTER the row has landed, so a `revalidatePath`
  * throw would be reported by that `catch` as "Failed to create redirect" — a
  * log line about a row that exists — and would then roll the row back with it,
@@ -243,6 +245,7 @@ export const createPathRedirect: CollectionAfterChangeHook = async ({
     type: '301' as const,
   }
 
+  const transactionID = req.transactionID
   try {
     const existing = await req.payload.find({
       collection: 'redirects',
@@ -325,6 +328,10 @@ export const createPathRedirect: CollectionAfterChangeHook = async ({
       { err: error },
       `Failed to create redirect ${from} -> ${to}`,
     )
+    // Nested Local API operations can abort the editor's transaction and
+    // clear its ID. The cascade and Corvus hooks must stop with that save.
+    if (transactionID != null && req.transactionID !== transactionID)
+      throw error
   }
 
   return doc

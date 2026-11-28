@@ -5,13 +5,14 @@ import { flattenBlockText } from '@/lib/content/flattenBlockText'
 import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
 
 /**
- * The five collections Corvus embeds (#82, decision D8(b)).
+ * The six collections Corvus embeds (#82 decision D8(b), revisited by #208).
  *
- * @remarks Pages are deliberately absent: they are layout chrome, and
- * embedding them buys retrieval noise rather than facts. Categories/Tags are
- * absent for the same reason — a taxonomy label carries no prose. Both are
- * additive later with no schema change, because `corvus_embeddings.collection`
- * is a plain `text` column, not an enum.
+ * @remarks D8(b) left Pages out as layout chrome. #208 took them back in, but
+ * only their text blocks: {@link chunkPage} reads headings, leads, prose and
+ * FAQs, and a Page with too little of that yields no chunk, so the chrome D8(b)
+ * worried about still stays out. Categories/Tags remain absent — a taxonomy
+ * label carries no prose. Adding a collection needs no schema change, because
+ * `corvus_embeddings.collection` is a plain `text` column, not an enum.
  *
  * This list is the single source of truth for which collections carry a
  * refresh hook; wiring a hook onto a collection that is not in here (or the
@@ -19,6 +20,7 @@ import { lexicalToBlocks } from '@/lib/content/lexicalToBlocks'
  */
 export const CORVUS_EMBEDDED_COLLECTIONS = [
   'posts',
+  'pages',
   'projects',
   'uses',
   'tech-stack',
@@ -76,6 +78,21 @@ export const CORVUS_GITHUB_REPOS_COLLECTION = 'github-repos'
 export const CORVUS_TECH_STACK_SUMMARY_COLLECTION = 'tech-stack-summary'
 
 /**
+ * The non-CMS collection holding allowlisted private-repository summaries
+ * (#193).
+ *
+ * @remarks Its own pseudo-collection, apart from
+ * {@link CORVUS_GITHUB_REPOS_COLLECTION}, for two reasons. The public sync's
+ * prune sweep deletes every `github-repos` document the public listing no
+ * longer accounts for, and a private repository is never in that listing, so
+ * sharing the namespace would delete every summary on every run. And
+ * `assertIndexableRepo` refuses anything private outright; keeping summaries
+ * out of that path means that guard stays exactly as strict as it is. Every
+ * word in these rows is owner-written (`src/lib/ai/privateRepoSummaries.ts`).
+ */
+export const CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION = 'github-private-summary'
+
+/**
  * The summary's document id — there is exactly one such document.
  *
  * @remarks `1` rather than `0` because `doc_id` is `NOT NULL integer` with no
@@ -114,6 +131,7 @@ export type CorvusChunkCollection =
   | CorvusCollectionSlug
   | typeof CORVUS_GITHUB_REPOS_COLLECTION
   | typeof CORVUS_TECH_STACK_SUMMARY_COLLECTION
+  | typeof CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION
 
 /**
  * One row destined for `corvus_embeddings`, minus the vector itself.
@@ -250,6 +268,12 @@ export function sourceUrlFor(
       // with a metadata-only UPDATE — no vectors, no tokens, no touched content
       // hash. See `src/lib/ai/embeddingsStore.ts`.
       return publicPathFor('posts', doc)
+    case 'pages':
+      // The served path (#208): a nested Page is cited at its full path —
+      // `/work/brytecore` — and the root Page at `/`. A path change moves no
+      // text, so it reaches stored chunks through the metadata-only repair
+      // described above, not a re-embed.
+      return publicPathFor('pages', doc)
     case 'projects':
       return '/projects'
     case 'uses':
@@ -277,6 +301,11 @@ export function sourceUrlFor(
       // different view of exactly the page those rows render on, so whichever
       // passage answers, the visitor is sent to `/tech`.
       return '/tech'
+    case CORVUS_PRIVATE_REPO_SUMMARY_COLLECTION:
+      // Never derived (#193). A summary's citation is the `publicUrl` its
+      // owner wrote, or none; there is no path this function could compose
+      // that would not risk pointing at the private repository itself.
+      return null
     case CORVUS_GITHUB_REPOS_COLLECTION: {
       const fullName = typeof ref === 'string' ? ref.trim() : ''
       // `owner/name`, both segments present. A half-formed value would
@@ -307,7 +336,8 @@ const str = (value: unknown): string =>
  *
  * Booleans are deliberately NOT coerced. No call site labels a boolean today
  * (`work-history.current` is the only boolean any chunker reads, and it picks
- * the word `'Present'` rather than emitting `true`), and a bare
+ * the words `'Present'` and `employmentHistoryLead`'s `Current` rather than
+ * emitting `true`), and a bare
  * `"Featured: true"` is worse grounding text than a purpose-written phrase.
  * A boolean field that earns a place in a chunk should get real wording at
  * its call site, which is a decision this helper should not silently make.
@@ -369,6 +399,64 @@ export function visibilityOf(doc: SourceDoc): 'public' | 'gated' {
 }
 
 /**
+ * A Lexical rich-text value as one text segment per top-level block.
+ *
+ * @param value - A Lexical editor state (or anything else, which yields none).
+ * @returns The non-empty plain-text segments, in document order.
+ */
+function richTextSegments(value: unknown): string[] {
+  return lexicalToBlocks(value)
+    .map((block) => flattenBlockText([block]))
+    .filter((text) => text.length > 0)
+}
+
+/**
+ * Pack text segments into chunk bodies near {@link TARGET_CHUNK_TOKENS}.
+ *
+ * @remarks Moved out of `chunkPost` unchanged when Pages started sharing it
+ * (#208); posts chunk byte-identically, which `chunking.test.ts` pins. Each
+ * body after the first opens with the tail of the one before it
+ * ({@link CHUNK_OVERLAP_TOKENS}), so a sentence split across a boundary is
+ * still findable from either side.
+ *
+ * @param segments - Plain-text segments, in document order.
+ * @returns The chunk bodies; empty when there are no segments.
+ */
+function packSegments(segments: readonly string[]): string[] {
+  const bodies: string[] = []
+  let current: string[] = []
+  let tokens = 0
+  let overlap = ''
+
+  const flush = () => {
+    if (!current.length) return
+    const body = current.join('\n')
+    bodies.push(body)
+    overlap = takeTailTokens(body, CHUNK_OVERLAP_TOKENS)
+    current = []
+    tokens = 0
+  }
+
+  for (const segment of segments) {
+    const segmentTokens = estimateTokens(segment)
+    if (current.length && tokens + segmentTokens > MAX_CHUNK_TOKENS) {
+      flush()
+    }
+    if (!current.length && overlap) {
+      current.push(overlap)
+      tokens = estimateTokens(overlap)
+    }
+    current.push(segment)
+    tokens += segmentTokens
+    if (tokens >= TARGET_CHUNK_TOKENS) {
+      flush()
+    }
+  }
+  flush()
+  return bodies
+}
+
+/**
  * Chunk a Post body into overlapping, block-aligned passages.
  *
  * @remarks Reuses the search index's existing text path
@@ -400,40 +488,7 @@ export function chunkPost(doc: SourceDoc): CorvusChunk[] {
   const prefixParts = [title, excerpt].filter(Boolean) as string[]
   const prefix = prefixParts.join(' — ')
 
-  const segments = lexicalToBlocks(doc.content)
-    .map((block) => flattenBlockText([block]))
-    .filter((text) => text.length > 0)
-
-  const bodies: string[] = []
-  let current: string[] = []
-  let tokens = 0
-  let overlap = ''
-
-  const flush = () => {
-    if (!current.length) return
-    const body = current.join('\n')
-    bodies.push(body)
-    overlap = takeTailTokens(body, CHUNK_OVERLAP_TOKENS)
-    current = []
-    tokens = 0
-  }
-
-  for (const segment of segments) {
-    const segmentTokens = estimateTokens(segment)
-    if (current.length && tokens + segmentTokens > MAX_CHUNK_TOKENS) {
-      flush()
-    }
-    if (!current.length && overlap) {
-      current.push(overlap)
-      tokens = estimateTokens(overlap)
-    }
-    current.push(segment)
-    tokens += segmentTokens
-    if (tokens >= TARGET_CHUNK_TOKENS) {
-      flush()
-    }
-  }
-  flush()
+  const bodies = packSegments(richTextSegments(doc.content))
 
   if (!bodies.length) {
     if (!prefix) return []
@@ -450,6 +505,162 @@ export function chunkPost(doc: SourceDoc): CorvusChunk[] {
     return {
       collection: 'posts',
       docId,
+      chunkIndex: index,
+      title,
+      content,
+      contentHash: hashChunkContent(content),
+      sourceUrl,
+      visibility,
+      publishedAt,
+    }
+  })
+}
+
+/**
+ * Page blocks whose text is the page's own writing, and so worth embedding
+ * (#208). Every other block type is layout or a view of another collection.
+ *
+ * @remarks Decision D8(b) kept Pages out of the index as "mostly layout
+ * chrome", and for most of them it still holds: of production's 15 published
+ * Pages on 2026-11-25, seven carry nothing but a `spacer`, an archive, a form
+ * or a photo strip `[measured, public /api/pages]`. What changed is that
+ * `/work/<role>`, `/about` and `/how-i-work` now hold the site's longest prose,
+ * none of it in any embedded collection. So a Page contributes only these
+ * blocks, walked through `container` → `column` nesting, and a Page whose
+ * text is below {@link MIN_PAGE_TEXT_TOKENS} contributes nothing at all: the
+ * chrome stays out without an editor having to set anything.
+ *
+ * `workHistoryCard`, `featureCardGrid`, `postRollup`, `articlesArchive` and
+ * the like are left out on purpose: they render rows another collection
+ * already embeds, so taking their text would put the same fact in the window
+ * twice under two citations.
+ */
+export const PAGE_TEXT_BLOCK_TYPES = [
+  'heading',
+  'lead',
+  'prose',
+  'content',
+  'faqList',
+] as const
+
+/** The layout blocks a Page's text blocks may be nested inside. */
+const PAGE_NESTING_BLOCKS: Record<string, string> = {
+  container: 'columns',
+  column: 'content',
+}
+
+/**
+ * Below this many estimated tokens of text, a Page is not embedded (#208).
+ *
+ * @remarks Sized against production on 2026-11-25: the four `/work/<role>`
+ * Pages, `/about`, `/how-i-work` and `/privacy` clear it by a wide margin,
+ * and `/work` — a one-line lead over a card grid of the roles — does not.
+ * A one-line page is a heading, not a passage; embedding it would put a
+ * near-empty chunk into every career question's window.
+ */
+export const MIN_PAGE_TEXT_TOKENS = 60
+
+/**
+ * The text segments of a Page's layout, in reading order.
+ *
+ * @param blocks - The `layout` array, or a nested blocks array.
+ * @returns One segment per heading, lead, paragraph or FAQ entry.
+ */
+function pageTextSegments(blocks: unknown): string[] {
+  return [...new Set(collectPageText(blocks))]
+}
+
+/**
+ * Walk a layout for {@link pageTextSegments}, duplicates included.
+ *
+ * @remarks The de-duplication sits one level up because the walk recurses:
+ * the same paragraph placed twice, once `desktopOnly` and once `mobileOnly`
+ * (the pattern `src/blocks/visibility.ts` exists for), is one passage to a
+ * reader and must be one to retrieval too.
+ *
+ * @param blocks - The `layout` array, or a nested blocks array.
+ * @returns Every text segment in reading order.
+ */
+function collectPageText(blocks: unknown): string[] {
+  if (!Array.isArray(blocks)) return []
+  const segments: string[] = []
+  for (const raw of blocks) {
+    if (!raw || typeof raw !== 'object') continue
+    const block = raw as Record<string, unknown>
+    const type = str(block.blockType)
+    const nested = PAGE_NESTING_BLOCKS[type]
+    if (nested) {
+      segments.push(...collectPageText(block[nested]))
+      continue
+    }
+    switch (type) {
+      case 'heading':
+      case 'lead': {
+        const text = str(block.text)
+        if (text) segments.push(text)
+        break
+      }
+      case 'prose':
+        segments.push(...richTextSegments(block.content))
+        break
+      case 'content':
+        for (const column of Array.isArray(block.columns)
+          ? block.columns
+          : []) {
+          segments.push(
+            ...richTextSegments(
+              (column as { richText?: unknown } | null)?.richText,
+            ),
+          )
+        }
+        break
+      case 'faqList': {
+        const heading = str(block.heading)
+        if (heading) segments.push(heading)
+        for (const item of Array.isArray(block.items) ? block.items : []) {
+          const entry = (item ?? {}) as { question?: unknown; answer?: unknown }
+          const answer = richTextSegments(entry.answer).join('\n')
+          const qa = [str(entry.question), answer].filter(Boolean).join('\n')
+          if (qa) segments.push(qa)
+        }
+        break
+      }
+    }
+  }
+  return segments
+}
+
+/**
+ * Chunk a Page by its text blocks only (#208).
+ *
+ * @remarks See {@link PAGE_TEXT_BLOCK_TYPES} for what is read and why. The
+ * prefix is the title and subtitle, as a post's is its title and excerpt;
+ * the citation is the Page's served path (`publicPathFor`), so a nested role
+ * Page cites `/work/<slug>` and the root Page `/`. Drafts never reach here:
+ * {@link isEmbeddable} refuses an unpublished Page exactly as it does a post.
+ *
+ * @param doc - The Page document.
+ * @returns Ordered chunks, or `[]` for a Page with too little text.
+ */
+export function chunkPage(doc: SourceDoc): CorvusChunk[] {
+  const segments = pageTextSegments(doc.layout)
+  const textTokens = segments.reduce(
+    (sum, segment) => sum + estimateTokens(segment),
+    0,
+  )
+  if (textTokens < MIN_PAGE_TEXT_TOKENS) return []
+
+  const title = str(doc.title) || null
+  const prefix = [title, str(doc.subtitle)].filter(Boolean).join(' — ')
+  const visibility = visibilityOf(doc)
+  const publishedAt = str(doc.publishedAt) || null
+  const sourceUrl = sourceUrlFor('pages', doc)
+
+  return packSegments(segments).map((body, index) => {
+    const content = prefix ? `${prefix}\n\n${body}` : body
+    return {
+      collection: 'pages',
+      docId: Number(doc.id),
       chunkIndex: index,
       title,
       content,
@@ -590,6 +801,58 @@ export function dailyDriverLead(
   if (proficiency !== DAILY_DRIVER_PROFICIENCY) return null
   const subject = name || 'This'
   return `${subject} is one of Brandon Perfetti's daily drivers — he reaches for it most days, rather than having only tried it.`
+}
+
+/**
+ * The sentence that opens a `work-history` chunk (#236).
+ *
+ * @remarks The measured defect: on staging (2026-09-15) the same career
+ * question retrieved the work-history passages on one ask and repository or
+ * project notes on the next, and "Tell me about Brandon's work history and the
+ * companies he's worked at" declined for lack of grounding. A role embedded as
+ * bare `Company:` / `Title:` / `Period:` labels shares almost no vocabulary
+ * with a career question, so on production's public corpus those passages sat
+ * at 0.35–0.43 cosine — level with the "Brandon Perfetti's Portfolio" project
+ * — and on that last question none cleared `CORVUS_SIMILARITY_FLOOR`
+ * [measured 2026-11-25: text-embedding-3-small over the public posts,
+ * projects, uses, tech-stack and work-history API corpus plus the repo
+ * fixtures, 10 queries].
+ *
+ * With this sentence first, work history ranks first on all seven
+ * career-shaped queries measured (0.45–0.48 on the work-history question),
+ * the current role ranks first for "where does he currently work", and the top
+ * five for "what does this site run on", "what tech does Brandon use" and
+ * "has Brandon built anything with Next.js" are identical to before.
+ *
+ * The WORDING is the finding, not a detail. A draft that opened "Brandon's
+ * current job … he works at" (the `dailyDriverLead` shape) won the career
+ * questions too, but then took four of the five slots on "what tech does
+ * Brandon use" — a sentence about Brandon resembles every question about
+ * Brandon. "Employer" and "work history" are career words a stack or project
+ * question does not use, so keep the name out of it. A longer draft ("…, the
+ * company where he worked as …") started taking a slot on "has Brandon built
+ * anything with Next.js"; this one did not. "Work history" and "employment
+ * history" both ranked work history first on all seven career queries;
+ * "work history" is also what the eval tier's term-coverage retriever needs
+ * to match "work history" and "worked" (`evals/fixtures/retriever.ts`).
+ *
+ * Note this changes chunk TEXT, so it changes `contentHash`: the four rows
+ * re-embed on their next save or the next `backfill-corvus-embeddings.ts` run
+ * (the weekly `corvus-backfill.yml`).
+ *
+ * @param company - The employer's name.
+ * @param title - The role's title.
+ * @param current - Whether this is the role he holds now.
+ * @returns The lead sentence, or `null` when there is no company to name.
+ */
+export function employmentHistoryLead(
+  company: string,
+  title: string,
+  current: boolean,
+): string | null {
+  if (!company) return null
+  const role = title ? `${title} at ${company}` : company
+  return `${current ? 'Current' : 'Past'} employer in his work history: ${role}.`
 }
 
 /**
@@ -827,11 +1090,17 @@ export function chunkFlatRecord(
       const role = str(doc.title)
       title = [company, role].filter(Boolean).join(' — ') || null
       const start = dateOnly(doc.startDate)
-      const end = doc.current ? 'Present' : dateOnly(doc.endDate)
+      // One status for the lead AND the period. The collection says an empty
+      // `endDate` means a current role and does not require `current`, so a
+      // row with neither must read as current in both places, not "Past
+      // employer" beside "– Present" (#236 review).
+      const endDate = dateOnly(doc.endDate)
+      const isCurrent = doc.current === true || !endDate
       lines = [
+        employmentHistoryLead(company, role, isCurrent),
         label('Company', company),
         label('Title', role),
-        start ? `Period: ${start} – ${end || 'Present'}` : null,
+        start ? `Period: ${start} – ${isCurrent ? 'Present' : endDate}` : null,
         label('Description', doc.description),
       ]
       break
@@ -876,18 +1145,19 @@ export function chunkDocument(
   collection: CorvusCollectionSlug,
   doc: SourceDoc,
 ): CorvusChunk[] {
-  return collection === 'posts'
-    ? chunkPost(doc)
-    : chunkFlatRecord(collection, doc)
+  if (collection === 'posts') return chunkPost(doc)
+  if (collection === 'pages') return chunkPage(doc)
+  return chunkFlatRecord(collection, doc)
 }
 
 /**
  * Is this document eligible to be in the index at all?
  *
- * @remarks Posts are drafts-enabled with autosave, so only a published
- * `_status` is embeddable — every autosave tick writes a draft version and
- * must cost zero provider dollars. The four flat collections have no drafts,
- * so they are always eligible.
+ * @remarks Posts and Pages are drafts-enabled with autosave, so only a
+ * published `_status` is embeddable — every autosave tick writes a draft
+ * version and must cost zero provider dollars, and a draft Page must never
+ * become a passage an anonymous chat can quote (#208). The four flat
+ * collections have no drafts, so they are always eligible.
  *
  * Future-dated posts ARE embedded, and excluded at QUERY time by retrieval's
  * `published_at <= now()` predicate rather than here. That is deliberate and
@@ -904,6 +1174,6 @@ export function isEmbeddable(
   collection: CorvusCollectionSlug,
   doc: SourceDoc,
 ): boolean {
-  if (collection !== 'posts') return true
+  if (collection !== 'posts' && collection !== 'pages') return true
   return doc._status === 'published'
 }

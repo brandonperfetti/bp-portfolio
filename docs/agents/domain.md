@@ -4,13 +4,14 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Layout: single-context
 
-This repo is **single-context**: one `GLOSSARY.md` at the repo root and one `docs/adr/` directory,
-neither of which exists yet — see "Where they would live" below.
+This repo is **single-context**: one `GLOSSARY.md` at the repo root and one `docs/adr/` directory.
+`GLOSSARY.md` exists, seeded with a CMS section for the CMS Domain Agent (#383); `docs/adr/` does not
+exist yet. See "Where they live" below.
 
 ### The `pnpm-workspace.yaml` here is not a monorepo signal
 
 The setup skill lists `pnpm-workspace.yaml` as a monorepo signal. This repo has one, and it is a
-**false positive**. pnpm 11 reads its settings from `pnpm-workspace.yaml` rather than from
+**false positive**. pnpm (11 and later) reads its settings from `pnpm-workspace.yaml` rather than from
 `package.json`, so the file exists here purely to hold `overrides`, `allowBuilds`,
 `minimumReleaseAge` and `minimumReleaseAgeExclude`. Its `packages:` list is `['.']` — the repo root
 itself, not a set of sub-packages.
@@ -20,8 +21,9 @@ itself, not a set of sub-packages.
 `minimumReleaseAge` key was absent, so the exclude list guarded nothing. The key is now set to
 `1440` (minutes, i.e. one day): `pnpm config get minimumReleaseAge` returns `1440`, and pnpm refuses
 to resolve any version published less than a day ago. The gate applies when a version is
-_resolved_ (`pnpm add`, `pnpm update`, a re-resolving install); a `--frozen-lockfile` install of
-versions already in the lockfile is not re-checked. Before choosing a version, read the key; an
+_resolved_ (`pnpm add`, `pnpm update`, a re-resolving install), and a `--frozen-lockfile` install
+also checks the versions already in the lockfile against it, so a version under a day old fails
+CI's install too (corrected 2026-11-25, #376). Before choosing a version, read the key; an
 exclude entry is a documented exception, see `docs/DEPENDENCIES.md` § "Release-age gate".
 
 The three checks that actually settle it, all negative:
@@ -39,17 +41,17 @@ the strength of the workspace file alone; re-run the three checks above first.
 - **`GLOSSARY-MAP.md`** at the repo root if it exists: it points at one `GLOSSARY.md` per context. Read each one relevant to the topic.
 - **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
 
-If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
+If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved, and adds new sections to `GLOSSARY.md` the same way. The CMS section is the one exception: it was seeded up front, on Brandon's decision of 2026-11-25 on #383, because the CMS Domain Agent (`docs/agents/cms-domain.md`) reads it.
 
-## Where they would live
+## Where they live
 
 ```
 /
-├── GLOSSARY.md                        ← glossary (does not exist yet)
+├── GLOSSARY.md                        ← glossary (CMS section seeded, #383)
 ├── docs/
 │   ├── adr/                           ← ADRs (does not exist yet)
 │   │   └── 0001-<slug>.md
-│   ├── agents/                        ← this directory
+│   ├── agents/                        ← this directory, and the CMS Domain Agent's brief
 │   └── ARCHITECTURE.md, AI.md, …      ← the existing subject-matter docs
 └── src/
 ```

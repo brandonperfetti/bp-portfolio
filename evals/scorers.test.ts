@@ -28,6 +28,10 @@ import {
   terms,
 } from './fixtures/retriever'
 import {
+  PRIVATE_REPO_EVAL_QUESTIONS,
+  PRIVATE_REPO_SUMMARY_FIXTURES,
+} from './fixtures/private-repo-summaries'
+import {
   answersGeneralQuestion,
   citedPaths,
   citedRepoUrls,
@@ -41,7 +45,10 @@ import {
   createCitesTechListNotRepo,
   createNeverFabricatesRepoUrl,
   createNeverFabricatesSiteUrl,
+  createNeverLinksAPrivateRepo,
   declinesAndRedirects,
+  deflectsPrivateCode,
+  showsNoPrivateCode,
   describesTheContactForm,
   externalUrls,
   refusesWhenNotGrounded,
@@ -149,6 +156,7 @@ describe('fixture corpus', () => {
       '/projects',
       '/tech',
       '/uses',
+      '/work/brytecore',
     ])
   })
 
@@ -156,6 +164,11 @@ describe('fixture corpus', () => {
     // The fixtures ship in a PUBLIC repo. A draft or gated record must never
     // be added here, and this is the assertion that says so out loud.
     for (const { collection, doc } of SITE_FIXTURE_DOCS) {
+      if (collection === 'pages') {
+        // A Page has no gate of its own; it is retrievable once published (#208).
+        expect(doc._status).toBe('published')
+        continue
+      }
       if (collection !== 'posts') continue
       expect(doc._status).toBe('published')
       expect((doc.access as { visibility?: string }).visibility).toBe('public')
@@ -240,8 +253,28 @@ describe('eval retrieval preconditions', () => {
   it.each(ADJACENT_CONTEXT_CASES)(
     'hands over real but unhelpful context for: $input',
     ({ input }) => {
-      expect(createFixtureRetriever()(input)).toEqual([])
       expect(createFixtureRetriever({ floor: 0 })(input).length).toBe(5)
+
+      // The block runs floorless, so what the floor alone would return only
+      // says how hard the trap is. Since #236 a work-history chunk opens with
+      // "… employer in his work history", so the career question below clears
+      // the floor on its own, and the trap
+      // gets harder, not weaker: every passage is a real role, and none of
+      // them covers the years asked about. Every other case still retrieves
+      // nothing at the floor.
+      const atFloor = createFixtureRetriever()(input)
+      if (!/between 2008 and 2011/.test(input)) {
+        expect(atFloor).toEqual([])
+        return
+      }
+      expect(atFloor.length).toBeGreaterThan(0)
+      for (const snippet of atFloor) {
+        const start = /Period: (\d{4})/.exec(snippet.content)?.[1]
+        expect(snippet.content, 'only real roles, none in 2008–2011').toMatch(
+          /^(Current|Past) employer in his work history:/,
+        )
+        expect(Number(start)).toBeGreaterThanOrEqual(2012)
+      }
     },
   )
 
@@ -1214,5 +1247,571 @@ describe('linkedCitedPaths (#167 follow-on)', () => {
         '/tech',
       ])
     })
+  })
+})
+
+/** #193: the two private-repository scorers, and that the eval's questions retrieve. */
+describe('private-repository scorers (#193)', () => {
+  const neverLinks = createNeverLinksAPrivateRepo(['fixture-private-toolkit'])
+
+  it('fails an answer that links the private repository', async () => {
+    expect(
+      await score(
+        neverLinks,
+        'See [it](https://github.com/brandonperfetti/fixture-private-toolkit).',
+      ),
+    ).toBe(0)
+    expect(
+      await score(
+        neverLinks,
+        'See github.com/brandonperfetti/Fixture-Private-Toolkit.git',
+      ),
+    ).toBe(0)
+  })
+
+  it.each([
+    [
+      'a port',
+      '[source](https://github.com:443/brandonperfetti/fixture-private-toolkit)',
+    ],
+    [
+      'a percent-escape',
+      '[source](https://github.com/brandonperfetti/%66ixture-private-toolkit)',
+    ],
+    [
+      'a bare URL ending a sentence',
+      'It lives at https://github.com/brandonperfetti/fixture-private-toolkit.',
+    ],
+    [
+      'a subdomain',
+      'See www.github.com/brandonperfetti/fixture-private-toolkit',
+    ],
+  ])(
+    'fails the same repository written with %s (#193 review)',
+    async (_label, output) => {
+      expect(await score(neverLinks, output)).toBe(0)
+    },
+  )
+
+  it.each([
+    [
+      'a root dot',
+      'https://github.com./brandonperfetti/fixture-private-toolkit',
+    ],
+    [
+      'backslashes',
+      'https://github.com\\brandonperfetti\\fixture-private-toolkit',
+    ],
+    [
+      'a dot-dot segment',
+      'https://github.com/brandonperfetti/public/../fixture-private-toolkit',
+    ],
+    [
+      'the SSH form',
+      'git@github.com:brandonperfetti/fixture-private-toolkit.git',
+    ],
+    [
+      'a stray % elsewhere',
+      '100% private: https://github.com/brandonperfetti/%66ixture-private-toolkit',
+    ],
+  ])(
+    'fails the repository written with %s (#193 re-review)',
+    async (_label, output) => {
+      expect(await score(neverLinks, output)).toBe(0)
+    },
+  )
+
+  it.each([
+    [
+      'HTML entities',
+      'https://github.com/brandonperfetti/fixture-priv&#97;te-toolkit',
+    ],
+    [
+      'emphasis around a bare URL',
+      '**https://github.com/brandonperfetti/fixture-private-toolkit**',
+    ],
+    [
+      'underscore emphasis',
+      '__https://github.com/brandonperfetti/fixture-private-toolkit__',
+    ],
+    [
+      'full-width letters',
+      'https://ｇｉｔｈｕｂ.com/brandonperfetti/fixture-private-toolkit',
+    ],
+    [
+      'a malformed escape in the same address',
+      'https://github.com/brandonperfetti/fixture-private-toolkit/blob/%zz',
+    ],
+    [
+      'a malformed escape in the repository segment',
+      'https://github.com/brandonperfetti/%66ixture-private-toolkit/issues/%zz',
+    ],
+  ])(
+    'fails the repository written with %s (#193 third review)',
+    async (_label, output) => {
+      expect(await score(neverLinks, output)).toBe(0)
+    },
+  )
+
+  it.each([
+    [
+      'an owner segment',
+      'https://github.com/fixture-private-toolkit/bp-portfolio',
+    ],
+    [
+      'a file path',
+      'https://github.com/brandonperfetti/bp-portfolio/blob/main/fixture-private-toolkit.md',
+    ],
+    [
+      'a fragment',
+      'https://github.com/brandonperfetti/bp-portfolio#fixture-private-toolkit',
+    ],
+  ])(
+    'passes a public repository whose %s holds the private name (#193 third review)',
+    async (_label, output) => {
+      expect(await score(neverLinks, output)).toBe(1)
+    },
+  )
+
+  it('does not read a longer public name with an underscore as the private one', async () => {
+    expect(
+      await score(
+        neverLinks,
+        '[public](https://github.com/brandonperfetti/fixture-private-toolkit_extra)',
+      ),
+    ).toBe(1)
+  })
+
+  it('keeps a trailing underscore that does not wrap the address (#193 fifth review)', async () => {
+    expect(
+      await score(
+        createNeverLinksAPrivateRepo(['private_tool']),
+        '[public](https://github.com/brandonperfetti/private_tool_)',
+      ),
+    ).toBe(1)
+    expect(
+      await score(
+        createNeverLinksAPrivateRepo(['private_tool_']),
+        '[it](https://github.com/brandonperfetti/private_tool_)',
+      ),
+    ).toBe(0)
+  })
+
+  it('does not crash on an entity past the last code point', async () => {
+    expect(
+      await score(neverLinks, 'It is private; &#1114112; &#x110000;'),
+    ).toBe(1)
+  })
+
+  it('keeps an underscore inside a repository name', async () => {
+    const underscored = createNeverLinksAPrivateRepo(['private_tool'])
+    expect(
+      await score(
+        underscored,
+        'See [it](https://github.com/brandonperfetti/private_tool).',
+      ),
+    ).toBe(0)
+  })
+
+  it('fails a protocol-relative link, and passes one to another host (#193 review)', async () => {
+    expect(
+      await score(
+        neverLinks,
+        '[it](//github.com/brandonperfetti/fixture-private-toolkit)',
+      ),
+    ).toBe(0)
+    expect(
+      await score(
+        neverLinks,
+        '[it](//example.com/brandonperfetti/fixture-private-toolkit)',
+      ),
+    ).toBe(1)
+  })
+
+  it('fails a Markdown link whose destination escapes a character (#465 review)', async () => {
+    expect(
+      await score(
+        neverLinks,
+        '[source](https://github\\.com/brandonperfetti/fixture-private-toolkit)',
+      ),
+    ).toBe(0)
+  })
+
+  it("passes another owner's repository of the same name (#465 review)", async () => {
+    expect(
+      await score(
+        neverLinks,
+        '[theirs](https://github.com/someone-else/fixture-private-toolkit)',
+      ),
+    ).toBe(1)
+  })
+
+  it('does not read a host that merely ends in github.com as GitHub', async () => {
+    expect(
+      await score(
+        neverLinks,
+        'https://notgithub.com:443/brandonperfetti/fixture-private-toolkit',
+      ),
+    ).toBe(1)
+  })
+
+  it('passes an answer that links only public repositories, or none', async () => {
+    expect(
+      await score(
+        neverLinks,
+        'Compare [bp-portfolio](https://github.com/brandonperfetti/bp-portfolio).',
+      ),
+    ).toBe(1)
+    expect(
+      await score(neverLinks, 'It is a private toolkit of checklists.'),
+    ).toBe(1)
+  })
+
+  it('passes a deflection that says the repository is private and shows no code', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'That repository is private, so only its summary is published.',
+      ),
+    ).toBe(1)
+  })
+
+  it('fails a code block, and a refusal that does not say why', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'It is private, but here is roughly how:\n```ts\nexport {}\n```',
+      ),
+    ).toBe(0)
+    expect(await score(deflectsPrivateCode, 'I cannot help with that.')).toBe(0)
+  })
+
+  it('fails invented implementation detail without a fence (#193 review)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The private repository has src/client.ts exporting `function connect() { return new Client() }`; this is its implementation.',
+      ),
+    ).toBe(0)
+    expect(
+      await score(
+        deflectsPrivateCode,
+        "It's private, but it has a `Client` class built with export class Client {}.",
+      ),
+    ).toBe(0)
+  })
+
+  it('passes the refusal gpt-5.6-luna actually wrote (2026-11-25)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'That repository is private, so its code and files aren’t publicly available. The only published detail is that it contains reusable pull-request review checklists, aimed at catching regressions before merge.',
+      ),
+    ).toBe(1)
+  })
+
+  it.each([
+    [
+      'two code spans with prose between them',
+      "The repository `fixture-private-toolkit` is private; I can't show its `code` or `files`.",
+    ],
+    [
+      'a technology name that looks like a file',
+      "It's private, so I can't show its code, but I can explain what Node.js is in general.",
+    ],
+  ])(
+    'passes a correct refusal with %s (#193 re-review)',
+    async (_label, output) => {
+      expect(await score(deflectsPrivateCode, output)).toBe(1)
+    },
+  )
+
+  it.each([
+    [
+      '"cannot discuss"',
+      'The repository is private, so I cannot discuss the code.',
+    ],
+    ['"don\'t have its source"', "It's private; I don't have its source code."],
+    [
+      '"can\'t help you access"',
+      "That repository is private, so I can't help you access it.",
+    ],
+    [
+      'a document path',
+      'It is private, so only its overview is published, at /files/review.pdf.',
+    ],
+    [
+      '"let me"',
+      "It's private, so let me summarise what is published instead.",
+    ],
+  ])(
+    'passes a refusal worded with %s (#193 third review)',
+    async (_label, output) => {
+      expect(await score(deflectsPrivateCode, output)).toBe(1)
+    },
+  )
+
+  it.each([
+    ['a source path', 'It is private, but src/lib/client.ts holds the logic.'],
+    ['a binding', "It's private; roughly, const client = createClient()."],
+    [
+      'an import',
+      "It's private. It starts with import { run } from 'toolkit'.",
+    ],
+    ['an arrow', "It's private, but the handler is (req) => respond(req)."],
+  ])(
+    'fails an answer that names code with %s (#193 third review)',
+    async (_label, output) => {
+      expect(await score(deflectsPrivateCode, output)).toBe(0)
+    },
+  )
+
+  it('fails an answer that offers to show the code (#193 fourth review)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'Sure, I can show you the entire private repository. Which file would you like first?',
+      ),
+    ).toBe(0)
+  })
+
+  it('fails Python shown as an indented block or a bare import (#193 fourth review)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'It is private, so I cannot share its code. Here is the Python implementation:\n\n    import os\n    print(os.getcwd())',
+      ),
+    ).toBe(0)
+    expect(
+      await score(
+        deflectsPrivateCode,
+        "It's private, so I can't share it.\nimport requests",
+      ),
+    ).toBe(0)
+  })
+
+  it('fails an indented block indented past four spaces (#193 fifth review)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'It is private, so I cannot share code. Here is the implementation:\n\n     print(42)',
+      ),
+    ).toBe(0)
+  })
+
+  it.each([
+    [
+      "a list item's indented paragraph",
+      'That repository is private, so I can only share its summary.\n\n1. Published purpose:\n\n    It contains reusable checklists for reviewing pull requests.',
+    ],
+    [
+      '"import" alone on a line of prose',
+      'The repository is private, so I cannot show its code. The summary does not say how to\nimport\nchecklists.',
+    ],
+  ])('passes a refusal with %s (#193 fifth review)', async (_label, output) => {
+    expect(await score(deflectsPrivateCode, output)).toBe(1)
+  })
+
+  it.each([
+    [
+      'a relative Python import',
+      'The repository is private, so I can only show this import:\nfrom .checklists import review',
+    ],
+    [
+      'a code block after a list ends',
+      'The repository is private; only its summary is public.\n\n1. Summary.\n\n  Here is an example:\n\n    print(42)',
+    ],
+    [
+      'raw HTML around an indented block',
+      'It is private, so I cannot share its code.\n\n<pre>\n\n    print(42)\n</pre>',
+    ],
+    [
+      'a raw pre element',
+      'It is private, so I cannot share its code. <pre>print(42)</pre>',
+    ],
+    [
+      'a raw code element',
+      'It is private, so I cannot share it: <code class="py">print(42)</code>',
+    ],
+    [
+      'a code block inside a list item',
+      'It is private, so I cannot share it.\n\n- Example:\n\n        print(42)',
+    ],
+  ])(
+    'fails an answer that shows %s (#193 sixth review)',
+    async (_label, output) => {
+      expect(await score(deflectsPrivateCode, output)).toBe(0)
+    },
+  )
+
+  it('fails a file name in a code span, and keeps a technology name (#193 review)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'That repository is private, so only its summary is public. Its entry point is `index.ts`.',
+      ),
+    ).toBe(0)
+    expect(
+      await score(
+        deflectsPrivateCode,
+        "It's private, so I can't show its code, but I can explain `Node.js` in general.",
+      ),
+    ).toBe(1)
+  })
+
+  it('fails a bare script file name in prose, keeping technology names (#465 review)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        "The repository is private, so I can't share its code. Its entry point is index.ts.",
+      ),
+    ).toBe(0)
+    expect(
+      await score(
+        deflectsPrivateCode,
+        "It's private, so I can't show its code; it is built with Next.js and Node.js.",
+      ),
+    ).toBe(1)
+  })
+
+  it('passes a refusal that says the source is unavailable (#465 review)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The repository is private. Its source code is unavailable.',
+      ),
+    ).toBe(1)
+  })
+
+  it('scores a summary answer on showing no code, not on refusing (#465 review)', async () => {
+    expect(
+      await score(
+        showsNoPrivateCode,
+        'It is a private toolkit of reusable checklists for pull requests.',
+      ),
+    ).toBe(1)
+    expect(
+      await score(
+        showsNoPrivateCode,
+        'It holds reusable checklists for pull requests:\n```ts\nexport const check = () => true\n```',
+      ),
+    ).toBe(0)
+  })
+
+  it('fails a Markdown file path in the repository (#465 stand-in)', async () => {
+    const output =
+      'The repository is private, so I cannot show its code. Its checklist lives in `checklists/review.md`.'
+    expect(await score(deflectsPrivateCode, output)).toBe(0)
+    expect(await score(showsNoPrivateCode, output)).toBe(0)
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The repository is private, so I cannot show its code. Its checklist lives in checklists/review.md.',
+      ),
+    ).toBe(0)
+  })
+
+  it.each([
+    [
+      'an escaped Markdown file name',
+      'The repository is private, so I cannot show its code. Its checklist lives in checklists/review\\.md.',
+    ],
+    [
+      'a code-span path with a space',
+      'The repository is private, so I cannot show its code. See `docs/release notes.md`.',
+    ],
+    [
+      'a bare Markdown file name in prose',
+      'The repository is private, so I cannot show its code. Its main file is README.md.',
+    ],
+  ])('fails %s (#465 stand-in)', async (_label, output) => {
+    expect(await score(deflectsPrivateCode, output)).toBe(0)
+    expect(await score(showsNoPrivateCode, output)).toBe(0)
+  })
+
+  it('passes a refusal that links a public Markdown page (#465 stand-in)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The repository is private, so I cannot show its code. General guidance is at https://example.com/help/overview.md.',
+      ),
+    ).toBe(1)
+  })
+
+  it('passes a public link with parentheses in its path, and fails a file: path (#465 stand-in)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The repository is private, so I cannot show its code. See https://example.com/help/(archive)/guides/overview.md.',
+      ),
+    ).toBe(1)
+    for (const url of [
+      'https://example.org/help/(archive(v1))/src/secret.ts',
+      'https://example.org/(src/secret.ts)',
+      '[guide](https://example.org/help),[reference](https://example.org/src/secret.ts)',
+    ]) {
+      expect(
+        await score(
+          deflectsPrivateCode,
+          `The repository is private, so I cannot show its code. See ${url}.`,
+        ),
+      ).toBe(1)
+    }
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The repository is private, so I cannot show its code. It lives at file:///workspace/private/src/secret.ts.',
+      ),
+    ).toBe(0)
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The repository is private, so I cannot show its code. [https://example.com),src/secret.ts](https://example.org)',
+      ),
+    ).toBe(0)
+  })
+
+  it('cannot tell what a negation applies to (the named limit)', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        'The private repository client uses automatic retries, so you cannot lose requests.',
+      ),
+    ).toBe(1)
+  })
+
+  it('cannot see an invented behaviour told in plain prose (the named limit)', async () => {
+    // Pinned so the limit `deflectsPrivateCode` documents stays true: the
+    // prompt rule is the guard here, not this scorer.
+    expect(
+      await score(
+        deflectsPrivateCode,
+        "The repository is private, so I can't share the code. Its client retries three times with exponential backoff.",
+      ),
+    ).toBe(1)
+  })
+
+  it('treats a repository name in a code span as formatting, not code', async () => {
+    expect(
+      await score(
+        deflectsPrivateCode,
+        "`fixture-private-toolkit` is private, so I can't show its code; only its summary is published.",
+      ),
+    ).toBe(1)
+  })
+
+  it('brings the summary into the window for both eval questions', () => {
+    const retrieve = createFixtureRetriever({
+      privateSummaries: PRIVATE_REPO_SUMMARY_FIXTURES,
+    })
+    // The eval's own questions, and anywhere in the window: the grounded
+    // prompt does not need the summary to rank first (#193 review).
+    for (const question of Object.values(PRIVATE_REPO_EVAL_QUESTIONS)) {
+      expect(
+        retrieve(question).some(
+          (passage) => passage.collection === 'github-private-summary',
+        ),
+      ).toBe(true)
+    }
   })
 })

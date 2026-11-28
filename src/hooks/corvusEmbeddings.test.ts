@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { Payload } from 'payload'
+
+import { installCorvusAfterCommit } from '@/hooks/corvusAfterCommit'
 
 /**
  * The seven hook non-negotiables (#82 research §3.7), one describe block each.
@@ -44,6 +47,7 @@ const changeArgs = (
     context?: Record<string, unknown>
     query?: Record<string, unknown>
     drizzle?: unknown
+    findOne?: (...args: unknown[]) => unknown
   } = {},
 ) => {
   const log = logger()
@@ -53,7 +57,10 @@ const changeArgs = (
     req: {
       payload: {
         logger: log,
-        db: { drizzle: 'drizzle' in over ? over.drizzle : { execute } },
+        db: {
+          drizzle: 'drizzle' in over ? over.drizzle : { execute },
+          ...(over.findOne ? { findOne: over.findOne } : {}),
+        },
       },
       context: over.context ?? {},
       query: over.query ?? {},
@@ -136,6 +143,93 @@ describe('2. skips drafts, unpublished saves, and autosave ticks', () => {
     expect(isAutosaveRequest({ query: {} })).toBe(false)
     expect(isAutosaveRequest({})).toBe(false)
     expect(isAutosaveRequest(null)).toBe(false)
+  })
+})
+
+describe('2b. a draft saved over a published document deletes nothing (#208)', () => {
+  // "Save draft" writes only a version; the collection row stays published and
+  // keeps serving. The hook asks that row through the adapter, on the
+  // request's transaction.
+  const draftOver = (
+    findOne: (...args: unknown[]) => unknown,
+    previousStatus = 'published',
+  ) =>
+    changeArgs({
+      doc: { id: 7, _status: 'draft' },
+      previousDoc: { id: 7, _status: previousStatus },
+      findOne,
+    })
+
+  it.each(['posts', 'pages'] as const)(
+    'keeps a published %s’s rows when a draft is saved over it',
+    async (collection) => {
+      const findOne = vi.fn(async () => ({ _status: 'published' }))
+      const { args } = draftOver(findOne)
+
+      await refreshCorvusEmbeddings(collection)(args)
+
+      expect(deleteDocumentEmbeddingsMock).not.toHaveBeenCalled()
+      expect(syncDocumentEmbeddingsMock).not.toHaveBeenCalled()
+      expect(findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          collection,
+          where: { id: { equals: 7 } },
+          req: expect.objectContaining({ payload: expect.anything() }),
+        }),
+      )
+    },
+  )
+
+  it('keeps the rows when a second draft follows the first', async () => {
+    const findOne = vi.fn(async () => ({ _status: 'published' }))
+    const { args } = draftOver(findOne, 'draft')
+
+    await refreshCorvusEmbeddings('pages')(args)
+
+    expect(syncDocumentEmbeddingsMock).not.toHaveBeenCalled()
+    expect(deleteDocumentEmbeddingsMock).not.toHaveBeenCalled()
+  })
+
+  it('still deletes on a real unpublish: the row itself is now a draft', async () => {
+    const { args } = draftOver(vi.fn(async () => ({ _status: 'draft' })))
+
+    await refreshCorvusEmbeddings('pages')(args)
+
+    expect(deleteDocumentEmbeddingsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'pages',
+      7,
+    )
+  })
+
+  it('fails the save, not silently, when the lookup errors (#208 review)', async () => {
+    // The error happened inside the save's own transaction, so the save
+    // cannot be trusted to commit; swallowing it would report one anyway.
+    const { args } = draftOver(
+      vi.fn(async () => {
+        throw new Error('db down')
+      }),
+    )
+
+    await expect(refreshCorvusEmbeddings('posts')(args)).rejects.toThrow(
+      /could not read posts#7/,
+    )
+    expect(deleteDocumentEmbeddingsMock).not.toHaveBeenCalled()
+  })
+
+  it('does not look anything up for a published save', async () => {
+    syncDocumentEmbeddingsMock.mockResolvedValue({
+      written: 0,
+      deleted: 0,
+      metadataUpdated: 0,
+      skipped: true,
+    })
+    const findOne = vi.fn()
+    const { args } = changeArgs({ findOne })
+
+    await refreshCorvusEmbeddings('pages')(args)
+
+    expect(findOne).not.toHaveBeenCalled()
   })
 })
 
@@ -343,6 +437,23 @@ describe('6. afterDelete AND published → draft delete the rows', () => {
     )
   })
 
+  it('an UNPUBLISHED Page deletes its rows, exactly as a post does (#208)', async () => {
+    deleteDocumentEmbeddingsMock.mockResolvedValue(undefined)
+    const { args } = changeArgs({
+      doc: { id: 28, _status: 'draft' },
+      previousDoc: { id: 28, _status: 'published' },
+    })
+
+    await refreshCorvusEmbeddings('pages')(args)
+
+    expect(deleteDocumentEmbeddingsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'pages',
+      28,
+    )
+    expect(syncDocumentEmbeddingsMock).not.toHaveBeenCalled()
+  })
+
   it('a publish (draft → published) refreshes rather than deletes', async () => {
     syncDocumentEmbeddingsMock.mockResolvedValue({
       written: 2,
@@ -399,27 +510,31 @@ describe('6. afterDelete AND published → draft delete the rows', () => {
 })
 
 describe('7. carries the collection slug through to the store', () => {
-  it.each(['posts', 'projects', 'uses', 'tech-stack', 'work-history'] as const)(
-    'wires %s',
-    async (collection) => {
-      syncDocumentEmbeddingsMock.mockResolvedValue({
-        written: 1,
-        deleted: 0,
-        metadataUpdated: 0,
-        skipped: false,
-      })
-      const { args } = changeArgs({
-        doc: { id: 1, _status: 'published' },
-        previousDoc: { id: 1, _status: 'published' },
-      })
+  it.each([
+    'posts',
+    'pages',
+    'projects',
+    'uses',
+    'tech-stack',
+    'work-history',
+  ] as const)('wires %s', async (collection) => {
+    syncDocumentEmbeddingsMock.mockResolvedValue({
+      written: 1,
+      deleted: 0,
+      metadataUpdated: 0,
+      skipped: false,
+    })
+    const { args } = changeArgs({
+      doc: { id: 1, _status: 'published' },
+      previousDoc: { id: 1, _status: 'published' },
+    })
 
-      await refreshCorvusEmbeddings(collection)(args)
+    await refreshCorvusEmbeddings(collection)(args)
 
-      expect(syncDocumentEmbeddingsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ collection }),
-      )
-    },
-  )
+    expect(syncDocumentEmbeddingsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ collection }),
+    )
+  })
 })
 
 describe('8. re-emits the daily-driver summary on tech-stack writes (#165)', () => {
@@ -596,6 +711,74 @@ describe('8. re-emits the daily-driver summary on tech-stack writes (#165)', () 
       vi.useRealTimers()
     }
   })
+
+  it.each(['save', 'delete'] as const)(
+    'bounds post-commit summary guard acquisition on %s',
+    async (operation) => {
+      vi.useFakeTimers()
+      try {
+        syncDocumentEmbeddingsMock.mockResolvedValue(synced)
+        deleteDocumentEmbeddingsMock.mockResolvedValue(undefined)
+        const doc = { id: 9 }
+        const log = logger()
+        const revision = Promise.withResolvers<{
+          rows: { revision: string }[]
+        }>()
+        const acquireSummaryRevision = vi.fn(() => revision.promise)
+        const execute = vi
+          .fn()
+          .mockResolvedValueOnce({ rows: [{ status: 'committed' }] })
+        if (operation === 'save') {
+          execute.mockResolvedValueOnce({ rows: [{ revision: 'row' }] })
+        }
+        execute.mockImplementation(acquireSummaryRevision)
+        const payload = {
+          logger: log,
+          findByID: vi.fn().mockResolvedValue(doc),
+          db: {
+            drizzle: { execute },
+            sessions: {
+              tx: {
+                db: {
+                  execute: vi.fn().mockResolvedValue({ rows: [{ xid: '1' }] }),
+                },
+              },
+            },
+            commitTransaction: vi.fn().mockResolvedValue(undefined),
+            rollbackTransaction: vi.fn(),
+          },
+        }
+        installCorvusAfterCommit(payload as unknown as Payload)
+        const args = { doc, req: { payload, transactionID: 'tx' } }
+        if (operation === 'save') {
+          await refreshCorvusEmbeddings('tech-stack')(args as never)
+        } else {
+          await deleteCorvusEmbeddings('tech-stack')(args as never)
+        }
+
+        let committed = false
+        const pending = payload.db.commitTransaction('tx').then(() => {
+          committed = true
+        })
+        await vi.advanceTimersByTimeAsync(HOOK_EMBEDDING_TIMEOUT_MS - 1)
+        expect(acquireSummaryRevision).toHaveBeenCalledTimes(1)
+        expect(committed).toBe(false)
+
+        await vi.advanceTimersByTimeAsync(1)
+        expect(committed).toBe(true)
+        await pending
+        expect(log.error).toHaveBeenCalledWith(
+          expect.stringContaining('deadline of'),
+        )
+
+        revision.resolve({ rows: [{ revision: 'summary' }] })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(refreshTechStackSummaryMock).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    },
+  )
 
   it('FAILS OPEN: a throwing summary step does not fail the save', async () => {
     // The whole point of putting the step inside the existing `try`. A

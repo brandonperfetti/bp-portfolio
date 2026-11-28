@@ -119,6 +119,42 @@ describe('resolveConsentConfig (CMS merge over defaults)', () => {
     ).toBe(old)
   })
 
+  it('serves the stored pre-#476 essential subtitle as written', () => {
+    // Production's `categories.essential.subtitle`, read anonymously on
+    // 2026-11-26 11:38Z. A stored value wins over the code default, so the new
+    // copy reaches production only once that field is edited in the admin.
+    const stored =
+      'Sign-in sessions (Clerk) and bot protection (Cloudflare Turnstile). Required for the site to work — always on.'
+    const resolved = resolveConsentConfig(
+      global({
+        categories: {
+          essential: { subtitle: stored },
+        } as CookieConsent['categories'],
+      }),
+    )
+    expect(
+      resolved.categories.find((c) => c.key === 'essential')!.subtitle,
+    ).toBe(stored)
+  })
+
+  it('falls back to the #476 essential subtitle when the field is blank', () => {
+    const resolved = resolveConsentConfig(
+      global({
+        categories: {
+          essential: { subtitle: '  ' },
+        } as CookieConsent['categories'],
+      }),
+    )
+    const subtitle = resolved.categories.find(
+      (c) => c.key === 'essential',
+    )!.subtitle
+    expect(subtitle).toBe(
+      DEFAULT_CONSENT_CONFIG.categories.find((c) => c.key === 'essential')!
+        .subtitle,
+    )
+    expect(subtitle).toContain('Sentry')
+  })
+
   it('serves an Analytics subtitle the editor wrote', () => {
     const resolved = resolveConsentConfig(
       global({

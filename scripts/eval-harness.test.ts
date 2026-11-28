@@ -478,6 +478,53 @@ describe('eval harness wiring', () => {
     ).toBe(productionDefault)
   })
 
+  it('runs the gate on the code default model', () => {
+    // #238. Until it, the code default was gpt-5-mini while production set
+    // AI_CHAT_MODEL=gpt-5.6-luna (measured 2026-09-15), so CI's Evalite job
+    // pinned the variable (release-235) and nothing guarded that pin. Now
+    // the default is gpt-5.6-luna, and the gate reaches the default the only
+    // way that cannot drift: by setting nothing. This pins all three links: the literal, an empty
+    // `.env.example` value (so a local keyed run measures the same model),
+    // and no model or provider selection anywhere in ci.yml outside a
+    // comment. Moving the default means editing this test, in the same
+    // change that measures the new model.
+    const corvus = stripTsComments(
+      readFileSync(join(REPO_ROOT, 'src/lib/ai/corvus.ts'), 'utf8'),
+    )
+    // The OpenAI fallback is getCorvusModelId's last, function-level return;
+    // the Anthropic one is indented inside its `if`.
+    const modelIdFn = corvus.slice(
+      corvus.indexOf('export function getCorvusModelId'),
+      corvus.indexOf('export function modelIdOf'),
+    )
+    const openaiDefault = /^ {2}return model \|\| '([^']+)'$/m.exec(
+      modelIdFn,
+    )?.[1]
+    expect(openaiDefault, 'the OpenAI default must be readable').toBe(
+      'gpt-5.6-luna',
+    )
+
+    expect(
+      /^AI_CHAT_MODEL=(.*)$/m.exec(
+        readFileSync(join(REPO_ROOT, '.env.example'), 'utf8'),
+      )?.[1],
+      '.env.example must leave AI_CHAT_MODEL empty, so a copied env runs the default',
+    ).toBe('')
+
+    const workflow = readFileSync(
+      join(REPO_ROOT, '.github/workflows/ci.yml'),
+      'utf8',
+    )
+    const selections = workflow
+      .split('\n')
+      .filter((line) => !/^\s*#/.test(line))
+      .filter((line) => /AI_CHAT_(MODEL|PROVIDER)\s*[:=]/.test(line))
+    expect(
+      selections,
+      'ci.yml must not select a Corvus model or provider; the gate runs the code default',
+    ).toEqual([])
+  })
+
   it('passes no temperature, which the gate’s model would discard', () => {
     // Removed on this branch after PR #126 logged
     // `AI SDK Warning (openai.responses / gpt-5-mini): The feature

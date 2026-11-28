@@ -51,8 +51,10 @@ export function reportSpeechRecognitionError(detail: {
  * fires on any route. Carries the method, the {@link HistoryWriteOutcome} and
  * the pathname only (`window.location.pathname`: no query string, no user
  * data). Query Logs for `history.write_dropped` to see whether the throttle
- * still fires, and on which route. The type-only import keeps this module free
- * of a runtime dependency on the guard.
+ * still fires, and on which routes: the guard reports each method and outcome
+ * once per route in a page load, so a reader who hits the throttle on a second
+ * route logs again with that route (#306). The type-only import keeps this
+ * module free of a runtime dependency on the guard.
  *
  * @param method - The History method the caller used.
  * @param outcome - What became of the write.
@@ -62,8 +64,8 @@ export function reportHistoryWriteRefusal(
   outcome: HistoryWriteOutcome,
 ): void {
   // Read the route now, not inside the `.then`: the guard reports each
-  // method-and-outcome pair once, and the dynamic import resolves later, so a
-  // navigation in between would attribute the refusal to the wrong route.
+  // method, outcome and route once, and the dynamic import resolves later, so
+  // a navigation in between would attribute the refusal to the wrong route.
   const path = window.location.pathname
   void import('@sentry/nextjs')
     .then((Sentry) => {

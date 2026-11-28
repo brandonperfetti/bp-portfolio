@@ -1,0 +1,47 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`#375 histories — fresh loads > H0: a not-required region grants Analytics in memory only; nothing is stored — production fails it 1`] = `"nothing automatic is recorded: expected { time: <time>, …(2) } to be null"`;
+
+exports[`#375 histories — fresh loads > H1: a stored automatic grant does not load the tag on a fresh page in a region that asks — production fails it 1`] = `"no record is restored or saved for the visitor: expected { time: <time>, …(2) } to be null"`;
+
+exports[`#375 histories — fresh loads > H1u: the same where the region cannot be read — production fails it 1`] = `"no tag loads: expected [ Array(1) ] to have a length of +0 but got 1"`;
+
+exports[`#375 histories — mid-visit > H2: moving into a region that asks clears the grant in memory; no denial is stored and the banner returns — production fails it 1`] = `"no denial is recorded on the visitor’s behalf: expected { time: <time>, …(2) } to be null"`;
+
+exports[`#375 histories — mid-visit > H3 (signed deviation): in, then back out without choosing, re-grants automatically — production fails it 1`] = `"going back out re-grants automatically: expected false to be true // Object.is equality"`;
+
+exports[`#375 histories — mid-visit > landing route: Back or Forward into a region that asks switches the tag off before gtag hears it — production fails it 1`] = `"the tag is off before gtag handles the traversal: expected false to be true // Object.is equality"`;
+
+exports[`#375 histories — mid-visit > landing route: a history push into a region that asks switches the tag off before the push returns — production fails it 1`] = `"the tag is off before the push returns: expected false to be true // Object.is equality"`;
+
+exports[`#375 histories — mid-visit > rule 6: a navigation after which the region cookie is gone clears an automatic grant — production fails it 1`] = `"the automatic grant is cleared: expected true to be false // Object.is equality"`;
+
+exports[`#375 histories — mid-visit > rule 6: a page restored from the back-forward cache with no region cookie clears an automatic grant — production fails it 1`] = `"the automatic grant is cleared: expected true to be false // Object.is equality"`;
+
+exports[`#375 histories — mid-visit > rule 6: a tab becoming visible with no region cookie clears an automatic grant — production fails it 1`] = `"the automatic grant is cleared: expected true to be false // Object.is equality"`;
+
+exports[`#375 histories — saves in flight > F4: a grant and a clear in quick succession leave no record and Analytics off — production fails earlier, on H0 (the automatic grant is stored) 1`] = `"nothing is stored: expected { consents: { …(5) }, …(1) } to be null"`;
+
+exports[`#375 histories — saves in flight > F5: overlapping automatic grants with a dialog draft in between end on the last region, with nothing stored — production fails earlier, on H0 (the automatic grant is stored) 1`] = `"nothing is stored: expected { consents: { …(5) }, …(1) } to be null"`;
+
+exports[`#375 histories — saves in flight > F6: a clear never wipes an explicit choice made while saves were in flight — production fails earlier, on H2 (the banner never comes back) 1`] = `"the banner is back after moving into a region that asks: expected null not to be null"`;
+
+exports[`#375 histories — saves in flight > F6b: an explicit Accept still saving is never taken for an automatic grant afterwards — production fails earlier, on H2 (the banner never comes back) 1`] = `"the banner is back after moving into a region that asks: expected null not to be null"`;
+
+exports[`#375 histories — saves in flight > F7: an automatic grant cannot land after the region asks, whatever order saves finish in — production fails it 1`] = `"the automatic grant did not land last: expected true to be false // Object.is equality"`;
+
+exports[`#375 histories — saves in flight > F7b: nothing automatic is ever written to storage, so no write can overwrite a denial — production fails it 1`] = `"nothing automatic is written to storage: expected [ …(6) ] to deeply equal []"`;
+
+exports[`#375 histories — the one-time clean-up and re-renders > F8: a re-render with a new config after the store exists deletes nothing and keeps the in-memory grant ours — production fails earlier, on H0 (the automatic grant is stored) 1`] = `"nothing is stored or restored: expected { consents: { …(5) }, …(1) } to be null"`;
+
+exports[`#375 histories — the one-time clean-up and re-renders > shape: a marked record of exactly the automatic shape is deleted and re-granted in memory — production fails it 1`] = `"the automatic record is deleted: expected { consents: { …(5) }, …(1) } to be null"`;
+
+exports[`#375 histories — two tabs > R1: a settled automatic record is cleaned before the store exists, so no tab restores it — production fails it 1`] = `"the automatic record was not restored: expected { time: <time>, …(2) } to be null"`;
+
+exports[`#375 histories — two tabs > R2: an old tab's second write after the clean-up is cleaned again on the next page, marker still kept — production fails it 1`] = `"the old tab’s record is deleted again: expected { consents: { …(5) }, …(1) } to be null"`;
+
+exports[`#375 histories — two tabs > R3: with localStorage unavailable, a tab writes nothing automatic over another tab's Accept, and clears its own grant — production fails it 1`] = `"tab A clears its own grant: expected true to be false // Object.is equality"`;
+
+exports[`#375 histories — two tabs > two tabs, deploy skew: a new tab deletes an old tab’s automatic record but keeps its marker, so the old tab still revokes — production fails it 1`] = `"tab B records nothing: expected { time: <time>, …(2) } to be null"`;
+
+exports[`#375 histories — two tabs > two tabs: a fresh tab in a region that asks writes nothing, and the first tab clears its own grant — production fails it 1`] = `"tab B asks the visitor: expected null not to be null"`;

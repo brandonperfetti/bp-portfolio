@@ -328,9 +328,9 @@ describe('resolveRedirect · descendant prefix rows (#150)', () => {
     })
 
     it('answers the LIVE destination when an intermediate row is missing', () => {
-      // The regression guard. Both ways a table goes incomplete are reachable:
-      // the redirects collection carries no delete restriction, and a row can
-      // fall outside the REDIRECT_LIMIT read. Chain `/a` → `/b` → `/c`.
+      // The regression guard. A table goes incomplete because the redirects
+      // collection carries no delete restriction (the read itself drops no row
+      // since #256). Chain `/a` → `/b` → `/c`.
       const chainStart: CmsRedirect = {
         ...prefixRow('/a', '/c'),
         toPathAtCapture: '/b',
@@ -591,8 +591,7 @@ describe('resolveRedirect · descendant prefix rows (#150)', () => {
       // A's first move row, whose snapshot names `/work/acme`; A has since
       // moved on to `/work/acme-corp`. B took `/work/acme` and moved to
       // `/work/beta`, writing its OWN row keyed at `/work/acme` (A's row there
-      // was deleted in admin, or fell outside the REDIRECT_LIMIT read — the
-      // two ways the docblock already names for an incomplete table).
+      // was deleted in admin — how the docblock says a table goes incomplete).
       const captureOfA = capturedFor(
         {
           ...prefixRow('/work/old', '/work/acme-corp'),

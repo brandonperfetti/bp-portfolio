@@ -75,8 +75,16 @@ export type PublishedPostSummary = Pick<
  *
  * @remarks `'use cache: remote'` so a `posts` tag purge reaches every
  * serverless instance, not only the one that ran the hook (#118). Measured
- * 43,381 bytes at the current corpus, 838,561 at the 1000-post query ceiling —
- * both under the 2 MB Runtime Cache item limit.
+ * 43,381 bytes at the current corpus and 838,561 at 1000 posts — both under
+ * the 2 MB Runtime Cache item limit, which puts that limit near 2,400 posts.
+ *
+ * **Every published post (#256).** This feeds `/sitemap.xml`'s article half,
+ * so it reads with `limit: 0`: it used to carry `limit: 1000`, and `limit: N`
+ * caps a Payload `find` even with `pagination: false` (`docs/PAYLOAD.md` §
+ * Local API gotchas), so post 1001 would have left the sitemap with no error
+ * and no log. Past the cache item limit the read stays complete and only
+ * stops caching; a missing URL is the worse of the two failures. The other
+ * list reads in this file follow the same rule.
  */
 export const getPublishedPostSummaries = async (): Promise<
   PublishedPostSummary[]
@@ -88,7 +96,8 @@ export const getPublishedPostSummaries = async (): Promise<
   const { docs } = await payload.find({
     collection: 'posts',
     draft: false,
-    limit: 1000,
+    limit: 0,
+    pagination: false,
     overrideAccess: false,
     select: PUBLISHED_POST_SUMMARY_SELECT,
     sort: '-publishedAt',
@@ -128,7 +137,8 @@ export const getPublishedPosts = async (): Promise<Post[]> => {
   const { docs } = await payload.find({
     collection: 'posts',
     draft: false,
-    limit: 1000,
+    limit: 0,
+    pagination: false,
     overrideAccess: false,
     sort: '-publishedAt',
     where: { _status: { equals: 'published' } },
@@ -150,7 +160,8 @@ export const getPublishedPostSlugs = async (): Promise<string[]> => {
   const { docs } = await payload.find({
     collection: 'posts',
     draft: false,
-    limit: 1000,
+    limit: 0,
+    pagination: false,
     overrideAccess: false,
     select: { slug: true },
     where: { _status: { equals: 'published' } },
@@ -179,7 +190,8 @@ export const getPublishedPostPaths = async (): Promise<string[]> => {
   const { docs } = await payload.find({
     collection: 'posts',
     draft: false,
-    limit: 1000,
+    limit: 0,
+    pagination: false,
     overrideAccess: false,
     select: { path: true },
     where: {
@@ -201,10 +213,19 @@ export const getPublishedPostPaths = async (): Promise<string[]> => {
  * not only the one that ran the hook (#118) — this per-slug entry is the one
  * the detail-page staleness incident landed on. Measured 45,356 bytes for one
  * post, far under the 2 MB Runtime Cache item limit.
+ *
+ * **Also tagged `pages` (#359).** The post's Lexical body can link to pages
+ * (`src/fields/defaultLexical.ts`, `enabledCollections: ['pages', 'posts']`),
+ * populated here with access control enforced, so a link to a draft page is
+ * cached as a bare id and renders as plain text (`lexicalToBlocks`, which also
+ * since #359 renders a populated internal link at all). A page publish,
+ * unpublish or delete purges `pages`, never `posts`, so without this tag the
+ * article kept that stale link until the `cmsContent` lifetime lapsed. The
+ * mirror of the page readers' `posts` tag (`pagesRepo.ts`).
  */
 const getPublishedPostBySlug = async (slug: string): Promise<Post | null> => {
   'use cache: remote'
-  cacheTag(CMS_TAGS.articles)
+  cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
@@ -227,10 +248,13 @@ const getPublishedPostBySlug = async (slug: string): Promise<Post | null> => {
  * exactly what a page costs it. An unplaced post has `path: null` and can never
  * match — which is what keeps `/articles/<slug>` the only URL for the rest of
  * the corpus.
+ *
+ * Tagged `pages` as well, for the reason {@link getPublishedPostBySlug} gives
+ * (#359).
  */
 const getPublishedPostByPath = async (path: string): Promise<Post | null> => {
   'use cache: remote'
-  cacheTag(CMS_TAGS.articles)
+  cacheTag(CMS_TAGS.articles, CMS_TAGS.pages)
   cacheLife('cmsContent')
   const payload = await getPayload({ config: configPromise })
   const { docs } = await payload.find({
@@ -308,16 +332,28 @@ export const getPostByPath = async (path: string): Promise<Post | null> => {
  * this function is the deliberate, single point where that app-layer
  * decision is allowed to override the data-layer gate. Never call it before
  * the gate. (Fresh-eyes review 2026-08, finding B2.)
+ *
+ * The override also reaches the body's link targets: Payload forwards
+ * `overrideAccess` into Lexical link population, so a link to a draft page or
+ * post comes back populated, where an access-enforced read returns a bare id.
+ * Each collection's `defaultPopulate` leaves `_status` out, so the read asks
+ * for it on top of those defaults; `lexicalToBlocks` then renders a draft
+ * target as text instead of a link to a URL that serves nothing (#359).
  */
 export const getGatedPostContent = async (
   id: number,
 ): Promise<Post['content'] | null> => {
   const payload = await getPayload({ config: configPromise })
+  const withStatus = (slug: 'pages' | 'posts') => ({
+    ...(payload.collections[slug]?.config.defaultPopulate ?? {}),
+    _status: true as const,
+  })
   const doc = await payload.findByID({
     collection: 'posts',
     id,
     depth: 2,
     overrideAccess: true,
+    populate: { pages: withStatus('pages'), posts: withStatus('posts') },
     select: { content: true },
   })
   return doc?.content ?? null

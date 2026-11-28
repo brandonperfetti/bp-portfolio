@@ -44,6 +44,14 @@ one set, version-locked.
   its own `openai@6` (`[measured 2026-09-26, pnpm why openai]`: `6.48.0`). The package is still declared; whether to remove it is
   open.
 - `streamdown`, `react-markdown`, `remark-gfm` — streaming markdown render.
+- `refractor` 5 — Prism syntax highlighting for article code blocks, through
+  the local rehype plugin `src/components/cms/rehypeRefractor.ts`. It replaced
+  `@mapbox/rehype-prism`, which was stuck on refractor 3 and `prismjs` <1.30
+  (GHSA-x7hr-w5r2-h6wg); refractor ≥4.7 bundles its grammars with no `prismjs`
+  dependency, so `pnpm why prismjs` prints nothing (#350).
+  `src/components/cms/refractorLanguages.ts` registers refractor 3.6.0's
+  grammars in its order, because the order decides the token classes the
+  Prism theme styles.
 - `zod` — request validation (chat, webhooks, forms).
 - `@upstash/ratelimit` + `@upstash/redis` — global rate limiting.
 - `evalite` + `autoevals` (dev) — Corvus behavior evals.
@@ -88,6 +96,14 @@ one set, version-locked.
   `@c15t/scripts/google-tag` subpath so the rest tree-shakes away. See
   `docs/ANALYTICS.md` for the architecture and for why its always-load
   default is overridden (#361).
+- `c15t` — the core of `@c15t/react`, imported directly for its storage
+  helpers (`getConsentFromStorage`, `deleteConsentFromStorage`) and the
+  store cache (`getOrCreateConsentRuntime`), which the in-memory automatic
+  grant and its one-time clean-up use (#375).
+- **The three c15t packages are pinned exactly**, not with a caret. The
+  automatic grant writes through the store's `setState` and `updateScripts`,
+  which are c15t internals; an upgrade is a deliberate change that has to
+  pass `ConsentManager.histories.test.tsx` and the consent e2e spec (#375).
 
 ## Dev/test
 
@@ -202,10 +218,25 @@ beside it had no effect. Verify with `pnpm config get minimumReleaseAge`
 (`1440`).
 
 - **Where it bites:** resolution — `pnpm add`, `pnpm update`, and an install
-  that has to re-resolve. `[measured 2026-09-26, pnpm 11.24.0]` a
-  `--frozen-lockfile` install of a version that is already locked is **not**
-  re-checked, so the gate guards what enters the lockfile, not what is
-  already in it.
+  that has to re-resolve — and every install's check of the lockfile. A
+  `--frozen-lockfile` install verifies each locked version against the
+  cutoff and fails with `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` on one that
+  is too new (`[measured 2026-11-25, pnpm 12.16.1 and 11.24.0]`: a scratch
+  clone with the cutoff raised to five years refused 1433 of 1741 entries
+  under both). So a version younger than a day breaks CI's install even once
+  locked, unless it is excluded. A passing check is cached on the machine
+  that ran it ("verified 1h ago"), so a warm local install can skip it; CI's
+  clean runners always run it. Corrected 2026-11-25 (#376): this bullet used
+  to say, from a 2026-09-26 measurement on pnpm 11.24.0, that a frozen
+  install does not re-check a locked version. Re-measured on that same
+  version, it does, so the earlier measurement did not hold.
+- **Strict by default (pnpm ≥12.3):** because the cutoff is set explicitly,
+  `minimumReleaseAgeStrict` defaults to `true`, so a resolution that finds no
+  version old enough stops and asks instead of adding the young version to
+  `minimumReleaseAgeExclude` on its own. One other command still writes
+  entries there: `pnpm audit --fix` adds each advisory's patched version
+  (since pnpm 11.0.0, pnpm/pnpm#11216), so review every entry it adds like a
+  hand-added one. The eighteen below predate strict mode.
 - **Exceptions:** a `name@version` entry in `minimumReleaseAgeExclude`,
   under the rule in `docs/SECURITY.md` § Dependency advisories (the case it
   exists for: a same-day security patch). The entries present on 2026-09-26 predate the gate —

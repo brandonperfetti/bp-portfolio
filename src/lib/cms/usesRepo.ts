@@ -30,8 +30,9 @@ export const getCmsUses = async (): Promise<CmsUseSection[] | null> => {
   const { docs } = await payload.find({
     collection: 'uses',
     depth: 0,
-    limit: 500,
+    limit: 0,
     overrideAccess: false,
+    pagination: false,
     sort: 'sortOrder',
   })
   if (!docs.length) return null

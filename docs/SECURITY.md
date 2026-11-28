@@ -413,9 +413,25 @@ stay there.
   _Moved from § Server enforcement._ The route drops every `system` message
   before the model call, and the system prompt is built server-side
   [source: `src/app/api/ai/chat/route.ts:179-180`, `:241`].
+- **The page a turn names is a reference, resolved server-side.** (#217
+  phase 2.) The body's only field beside `messages` is a strict
+  `{ collection, id }`; the title and path the prompt carries are read from
+  the published CMS document, a gated post is named only to a viewer
+  `canAccess` admits, and a crafted body with its own title is refused. The
+  CMS title itself is treated as data: it cannot form a Markdown link and is
+  never a link label, so the one link the line offers is always the
+  server-resolved path (a bare URL in a title still appears as quoted text)
+  [source: `src/lib/ai/pageContext.ts`, `src/lib/ai/groundedSystem.ts`,
+  `src/app/api/ai/chat/route.test.ts`].
 - **Never a live tool call from the chat route.** _Moved from § Public
   GitHub repos as a collection._ `[measured 2026-09-27]` the route passes no
   `tools` to the model (`git grep -n tool` on the route: no hits).
+- **Nothing is ever read from a private repository** (#193). A private
+  repository reaches the index only as an owner-written summary on the
+  allowlist in `src/lib/ai/privateRepoSummaries.ts` (empty by default, no
+  wildcard), validated so no URL, owner or GitHub address can enter it; the
+  sync makes no request for it. Mechanism: `docs/AI.md` § Private
+  repositories.
 - A repository made private or deleted must stop being retrievable.
   _Moved from § Never-leak_, which describes the three mechanisms that carry
   it (`assertIndexableRepo` in `src/lib/ai/githubRepos.ts:109`, among them).
@@ -456,7 +472,7 @@ stay there.
     `path` is `window.location.pathname` (no query string, no user data) and
     `outcome` is `retrying`, `gave_up` or `retry_failed` (a refused replace
     is retried since #272, so `dropped` is no longer logged), once
-    per method-and-outcome pair per page load.
+    per method, outcome and route per page load (#306).
   - The guard (`src/lib/history/historyWriteGuard.ts`) contains only the
     browser's history-throttle `SecurityError` (matched on name and message,
     so the cross-origin `SecurityError` is not mistaken for it)
@@ -544,7 +560,6 @@ stay there.
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | `@modelcontextprotocol/sdk` 1.32.2 | GHSA-f897-62hf-6gxq, -6qxp-vccf-f47h, -46jr-4wx8-v453, -rvq5-wwqv-78pq, -6prh-2h8m-c8cw, -22jm-h49p-29qw | `@payloadcms/plugin-mcp` 3.93.0: exactly 1.30.0; `mcp-handler` 1.1.0: exactly 1.26.0 | prod                                                                                               | a Payload release pins ≥1.32 and the `mcp-handler` it resolves declares a range that admits ≥1.32.0 (evidence: `docs/DEPENDENCIES.md` § Known unmet peers) | Brandon, 2026-11-14 (#312) |
 | `dompurify` `^3.4.17`              | Dependabot alerts #289, #371, #391, #392, #393                                                           | `monaco-editor` 0.56.0 (Payload's admin code field): exactly 3.4.8                   | prod (admin)                                                                                       | a `monaco-editor` release the tree resolves pins ≥3.4.17                                                                                                   | Brandon, 2026-11-15 (#345) |
-| `prismjs` 1.30.0                   | GHSA-x7hr-w5r2-h6wg                                                                                      | `refractor` 3.6.0, via `@mapbox/rehype-prism` 0.9.0: `~1.27.0`                       | prod (client bundle)                                                                               | #350: a rehype plugin on `refractor` ≥4.7.0 (4.0–4.6 still depend on `prismjs` <1.30), and `pnpm why prismjs` shows nothing below 1.30.0                   | Brandon, 2026-11-15 (#347) |
 | `better-sqlite3` `^13.0.3`         | v11 aborts the Evalite job at worker teardown (exit 134; `pnpm-workspace.yaml` comment)                  | `evalite` 0.19.0: `^11.6.0` (crosses a major)                                        | dev and CI; the prod graph also holds it as `drizzle-orm`'s optional peer, never loaded (Postgres) | an `evalite` release declares `^13`                                                                                                                        | Brandon, 2026-11-15 (#347) |
 
 - **A mitigation does not clear an advisory.** Before #312's override, the

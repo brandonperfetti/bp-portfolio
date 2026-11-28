@@ -9,7 +9,12 @@
 - **E2E** — Playwright (`e2e/`), production server in CI
   (`pnpm test:e2e`). Sandboxed runners can pin the browser via
   `PLAYWRIGHT_EXECUTABLE_PATH`. Conditional skips guard content-dependent
-  specs (e.g. empty article DB).
+  specs (e.g. empty article DB). **A probe that feeds `test.skip` must not
+  swallow a load failure** (#205): assert the page loaded (status, a landmark)
+  before reading the content condition, and never wrap the probe in a
+  catch-all, or a 500 becomes a green skip. Worked example: `hasStickyRail` in
+  `e2e/ui-regression.spec.ts`. A skip whose condition is a settled owner
+  decision rather than variable content is dead coverage: delete the spec.
 - **Storybook** — `pnpm build-storybook` is a CI gate (story breakage);
   a11y addon fails stories on serious violations. That gate is
   **compile-only**, though: it proves a story module builds, not that it
@@ -106,7 +111,7 @@ first failing step:
 ```sh
 set -euo pipefail
 export PAYLOAD_SECRET=ci-not-a-real-secret
-export NEXT_PUBLIC_SITE_URL=http://localhost:3000
+export NEXT_PUBLIC_SITE_URL=http://localhost:6001
 export NEXT_PUBLIC_SITE_NAME='BP Portfolio (CI)'
 corepack enable
 pnpm install --frozen-lockfile
@@ -132,6 +137,61 @@ Postgres, Playwright or provider keys and remain gated by PR CI. A green gate
 says nothing about whether a user journey works. The two reader discovery
 journeys have an owned recipe in § Verifying a journey locally below; see
 JOURNEYS for the proof and remaining gaps of other journeys.
+
+## Running the pg tier locally
+
+The pg tier is `pnpm exec vitest run --root evals` with `DATABASE_URI` set: the
+`evals/*.test.ts` files that need a real migrated Postgres (see the Payload
+pipeline integration bullet above). CI runs it on a fresh database every time;
+locally, the database is whatever `DATABASE_URI` names.
+
+**It refuses a database behind this checkout's migrations (#356).**
+`evals/migrations-current.ts`, the eval root's Vitest global setup, compares
+`payload_migrations` with `src/migrations/index.ts` before any file runs, and a
+database missing any shipped migration fails the run with one message naming
+`pnpm migrate`. Before it, a stale shared development database failed eight
+files on missing columns, which read like a regression in the change under
+test. Rows the checkout does not ship (a newer branch's migrations) are not a
+refusal. It does nothing without `DATABASE_URI`, and nothing under Evalite.
+
+Either run `pnpm migrate` on the database you point it at, or use a throwaway
+one. A throwaway database is the closer match to CI and leaves no fixtures in a
+database you keep:
+
+```sh
+(
+  set -eu
+  container=$(docker run -d --rm --name bp-pg-tier -p 127.0.0.1:55432:5432 \
+    -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres \
+    -e POSTGRES_DB=bp_portfolio_ci --tmpfs /var/lib/postgresql/data \
+    pgvector/pgvector:pg16)
+  trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+  # Wait for the TCP listener; first-boot init serves only a socket.
+  for i in $(seq 1 30); do
+    docker exec "$container" pg_isready -h 127.0.0.1 -U postgres -q && break
+    sleep 1
+  done
+  docker exec "$container" pg_isready -h 127.0.0.1 -U postgres
+  export DATABASE_URI=postgres://postgres:postgres@127.0.0.1:55432/bp_portfolio_ci
+  export PAYLOAD_SECRET=ci-not-a-real-secret
+  # Empty, not unset: Payload's CLI reloads .env, which an unset name lets back in.
+  export BLOB_READ_WRITE_TOKEN= STORAGE_VERCEL_BLOB_BASE_URL=
+  pnpm migrate
+  pnpm seed:e2e
+  pnpm exec vitest run --root evals
+)
+```
+
+With no `BLOB_READ_WRITE_TOKEN`, `pnpm seed:e2e` writes its uploaded images to
+`media/` in the checkout (Payload's default upload directory for the `media`
+collection). With the token set, `src/payload.config.ts` turns on Vercel Blob
+storage and the seed uploads to that store instead, and a set
+`STORAGE_VERCEL_BLOB_BASE_URL` refuses tokenless uploads. The recipe exports
+both as empty strings, because `payload run` loads `.env` files and fills any
+name that is unset, but leaves a name that is set (even to empty) alone. Run
+this recipe in a disposable checkout with no existing local uploads. The
+seeded `media/` files are ignored by Git.
 
 ## CI (`.github/workflows/ci.yml`)
 
@@ -200,18 +260,20 @@ that the suite passes; a red one is not evidence that it fails.
 
 Two related notes:
 
-- The suite drives the app at `http://127.0.0.1:3000` (`use.baseURL`). Next
+- The suite drives the app at `http://127.0.0.1:6001` (`use.baseURL`). Next
   blocks cross-origin requests to its dev-only `/_next` and `/__nextjs`
   endpoints, and its built-in allowlist covers only `localhost`, so
   `next.config.mjs` carries `allowedDevOrigins: ['127.0.0.1']` (#119). The key
   is dev-only — it has no effect on `next build` / `next start`, which is what
   `CI=1` uses.
-- **Home sticky rail** — if the home rail does not stick, check the DATA
-  before the code. Sticky is a per-column CHECKBOX on the Column block
-  (`src/blocks/Column/config.ts`, `sticky`, label "Stick to the top while
-  scrolling", `defaultValue: false`), and it only applies from the `lg`
-  breakpoint up. The one-line check: open Pages → `home` in the admin and
-  confirm that checkbox is ticked on the rail column. Unticked is a content
+- **Sticky rails** — the home rail is **not** sticky, by Brandon's decision
+  (2026-09-09, #205), and the e2e seed matches; `about desktop sticky right
+rail…` in `e2e/ui-regression.spec.ts` is the sticky-rail coverage. If a rail
+  that should stick does not, check the DATA before the code. Sticky is a
+  per-column CHECKBOX on the Column block (`src/blocks/Column/config.ts`,
+  `sticky`, label "Stick to the top while scrolling", `defaultValue: false`),
+  and it only applies from the `lg` breakpoint up. Open the page in the admin
+  and confirm that checkbox is ticked on the rail column. Unticked is a content
   edit, not a bug — no code change will fix it.
 
 ## Verifying a journey locally
@@ -243,7 +305,7 @@ auto-pinning are disabled; missing manager cache is also a refusal. A
 standalone pnpm of the wrong version refuses rather than fetching the pin.
 The explicit lowercase pnpm environment pins prevent inherited settings from
 overriding the refusal flags; keep the entire prefix on every invocation. Bare
-`pnpm verify:readers` is not this recipe: pnpm 11 may automatically install and
+`pnpm verify:readers` is not this recipe: pnpm may automatically install and
 run the Husky prepare lifecycle before the helper starts. Use Playwright's installed
 browser or a cached Chromium headless shell; a cached browser is not CI's
 managed browser. The existing seed reads public Cloudinary images.
@@ -268,7 +330,7 @@ checks on the existing local installation layout instead of switching its
 virtual-store default. The application and tests still receive `CI=1` and
 `NODE_ENV=production`; this does not disable their CI behavior. A different
 installation layout must satisfy admission or stop, not reinstall.
-It refuses occupied loopback ports 3000/55432, missing dependencies,
+It refuses occupied loopback ports 6001/55432, missing dependencies,
 pre-existing `media/`, and another lab's checkout lock. It preserves an
 existing `.next/` by moving it to `original.next` in the run directory and
 restores it during cleanup. Do not edit source, change environment files,
@@ -335,7 +397,7 @@ A green total, zero tests, expected failure or skipped required case is not
 proof. Read the full report/trace for assertions and any skip annotations.
 
 For authorized interactive browser checks, use the prepared
-`http://127.0.0.1:3000` instance after doctor, as the sole driver. Do not change
+`http://127.0.0.1:6001` instance after doctor, as the sole driver. Do not change
 fixtures. Keep interactive observations separate from the codified verdict.
 The evidence command also works after cleanup. Source review or one client's
 successful invocation does not establish another client's capabilities.

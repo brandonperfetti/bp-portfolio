@@ -50,6 +50,27 @@ describe('DEFAULT_CONSENT_CONFIG (today’s copy + UX)', () => {
     expect(analytics.subtitle).not.toContain('cookieless signal')
   })
 
+  it('names every tool that runs before a choice, and when (#476)', () => {
+    const essential = DEFAULT_CONSENT_CONFIG.categories.find(
+      (c) => c.key === 'essential',
+    )!
+    // Brandon's #368 decision: Clerk on every page, Turnstile on a form's
+    // first focus (#475), Sentry outside the banner by #213.
+    expect(essential.subtitle).toContain('Clerk')
+    expect(essential.subtitle).toContain('loads on every page')
+    expect(essential.subtitle).toContain('even if you never sign in')
+    expect(essential.subtitle).toContain('Cloudflare Turnstile')
+    expect(essential.subtitle).toContain('once you start filling in a form')
+    expect(essential.subtitle).toContain('Sentry')
+    expect(essential.subtitle).toContain('not your account')
+    // No promise about email until the browser redacts addresses (#480).
+    expect(essential.subtitle).not.toMatch(/email/i)
+    // The id is not all Sentry gets; the error and its page go too.
+    expect(essential.subtitle).toContain('the error and the page')
+    // Not every one of them is needed for the site to work.
+    expect(essential.subtitle).not.toContain('Required for the site to work')
+  })
+
   it('defaults the three feature toggles to today’s behavior', () => {
     expect(DEFAULT_CONSENT_CONFIG.features.showManageButton).toBe(true)
     expect(DEFAULT_CONSENT_CONFIG.features.showPersistentCookieButton).toBe(

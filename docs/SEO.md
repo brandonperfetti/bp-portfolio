@@ -78,6 +78,37 @@ JSON-LD (identity from the `Identity` global), serialized via `toSafeJsonLd`
   read has to reach the function (a `MISS`, or a function log line) and list
   the new URL. The `posts-sitemap`/`pages-sitemap` tags deleted in wave 8
   stay deleted.
+  **Verify freshness with `pnpm probe:freshness` (#294).** It publishes a
+  throwaway `zz-freshness-probe-…` page (and, with `--article`, an article)
+  through one write path, `--write-path rest` (the REST API `/admin` calls) or
+  `mcp` (`POST /api/mcp`). It polls `/sitemap.xml` and the probe URL until the
+  publish shows (inclusion) and, after warming the URL, until the unpublish
+  shows: gone from the sitemap and a 404 (removal). It then deletes the probes
+  in a `finally` when the create returned an ID. A missing ID leaves ownership
+  unconfirmed and requires manual cleanup. The probe checks that the API returns
+  nothing for the created IDs, no page, post or
+  redirect matches the prefix, and the final `<loc>` pathnames, including
+  duplicate counts, match the baseline.
+  Each read's status, `x-vercel-cache`, `age`, `x-vercel-id` and probe presence
+  goes to the console and to `reads.tsv`, with raw headers and bodies, in the
+  `--evidence` directory. Exit codes: 0 PASS, 1 FAIL, 2 refused before any
+  write, 3 cleanup incomplete. The target is local by default (a loopback
+  `--base-url`); `--target staging` needs `--allow-staging-writes` and takes only
+  `staging.brandonperfetti.com` or a non-`master` branch alias
+  (`bp-portfolio-git-<branch>-sans-faux-studios.vercel.app`; a hash URL or the
+  `master` alias can be production), and
+  `--target production` needs `--allow-production-writes`. The article probe is
+  opt-in, because a live article shows in the public `/feed.xml`. Credentials
+  are script-only and per target (`CMS_PROBE_*_<TARGET>`, `.env.example`), from
+  `.env.local`; a nonempty exported value wins over the file. Protected staging
+  deployments, including the staging domain and branch aliases, need
+  `VERCEL_AUTOMATION_BYPASS_SECRET`, which goes out as
+  `x-vercel-protection-bypass`; only staging sends it, and production never
+  reads it. Run it after a change to caching, the revalidation hooks,
+  Next, Payload or the MCP plugin; it is not a CI step or a monitor. A local
+  `pnpm dev` server does not cache like a deployment, so a local run proves
+  the script and the purge order, not the edge: run it against
+  `next build && next start`, then staging.
 - `src/app/robots.ts` — **a recorded policy since 2026-09-27 (#221)**, pinned
   by `robots.test.ts`. One rule set for every crawler:
   `Disallow: /admin$`, `/admin/` and `/api/` — the Payload admin and the JSON

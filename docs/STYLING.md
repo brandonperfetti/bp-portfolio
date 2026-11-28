@@ -50,10 +50,20 @@ are already described — so the doctrine lives here rather than in
   before #202 and is the exact per-call-site repainting the first rule in this
   section forbids. `.corvus-surface`'s `--corvus-accent` is an alias of this
   token, so Corvus and the rest of the site cannot drift apart.
-  The one thing `text-link-accent` is **not** is the badge ink — the chips in
-  `ArticleMeta`, `TechCard` and `ArticlesExplorer` put teal-700 on a `bg-teal-50`
-  tint and invert to teal-200/teal-300 on a teal-900/950 tint. Different pair,
-  different backdrop; it still wants a token of its own.
+  Its hover is **`hover:text-link-accent-hover`** `[2026-11-25, #231]`:
+  teal-800 in light (it **darkens**, Brandon's call; the old literal
+  `hover:text-teal-600` lightened and measured 3.66:1 on white), teal-300 in
+  dark. Write the one class; never a literal `hover:text-teal-*` beside
+  `text-link-accent`.
+- **`--badge-accent` / `--badge-accent-surface` are the teal chip — ink on
+  its own tint, not the link ink.** `[2026-11-25, #230]` Consume them as
+  **`bg-badge-accent-surface text-badge-accent`** (the topic chips in
+  `ArticleMeta`, the tag pill in `ArticlesExplorer`, the GitHub-signal badge
+  in `TechCard`). Light is teal-700 on teal-50; dark is teal-200 on teal-900 at
+  40%, the one translucent value in the block, so its floor is measured after
+  compositing over the page and a card. The light ink happens to be the same
+  step as `--link-accent`; it is still its own token because its floor is
+  measured against the tint, not the page.
 - **`--accent` is shadcn's hover surface, not the brand accent.** It stays on
   the zinc ramp. The brand accent is `--primary`.
 - **Hover DARKENS, including on the primitives.** `--primary-hover` (teal-800)
@@ -61,7 +71,9 @@ are already described — so the doctrine lives here rather than in
   consumes it as `hover:bg-primary-hover`. shadcn's stock `hover:bg-primary/90`
   composites the fill over the page and so lightens in light mode, which is the
   wrong direction for the same accessibility reason the bespoke Button records.
-  Do not reintroduce an alpha hover on a fill. `--secondary-hover` is the same
+  Do not reintroduce an alpha hover on a fill. The link ink follows the same
+  direction: `--link-accent-hover` darkens in light and lightens in dark,
+  which is "away from the page" in both. `--secondary-hover` is the same
   rule applied to the neutral fill: the `secondary` variant's stock
   `hover:bg-secondary/80` lightened in light mode too, and the token steps one
   notch down the zinc ramp in each theme (zinc-100 → zinc-200 light, zinc-800 →
@@ -72,8 +84,10 @@ are already described — so the doctrine lives here rather than in
   re-derives the WCAG ratio in both themes (4.5:1 where the role is text, 3:1
   where it is a fill edge or ring) for the surfaces
   (`--background`/`--foreground`, `--card*`, `--popover*`), primary and
-  secondary each with their hover, muted, accent, `--link-accent` (4.5:1 on all
-  three surfaces in both themes) and the ring — plus the base layer's
+  secondary each with their hover, muted, accent, `--link-accent` and
+  `--link-accent-hover` (4.5:1 on all three surfaces in both themes, and the
+  hover contrasting with the page more than the rest), `--badge-accent` (4.5:1
+  on its tint, composited over the page and a card) and the ring — plus the base layer's
   `focus-visible` outline. Add a themed token, add its pair. Three documented
   exceptions: `--border`/`--input` are named steps in light but an alpha white
   in dark, so identity is not assertable there; `--destructive*` is the

@@ -151,11 +151,13 @@ source states none, it says so.
   cascading (`docs/FEATURES.md` § Pages and sections).
 - **Consequence:** a section rename carries its subtree with one prefix
   redirect.
-- **Revisit when:** the source records no condition. Known defect, not a
-  bypass: a Local-API draft save of a published page with published children
-  is wrongly refused, because the guard cannot see `draft: true` and reads it
-  as an unpublish (#197; `docs/PAYLOAD.md` § Local API gotchas). The invariant
-  itself stands.
+- **Revisit when:** the source records no condition. A Local-API draft save
+  (`draft: true`) of a published page with published children goes through
+  when it does not move the page; a Local-API draft that would change its slug
+  or parent is refused, and so is an unpublish (#197, option A;
+  `docs/PAYLOAD.md` § Local API gotchas). Overlapping or failed updates of the
+  same page on one reused request fall back to refusing, never to letting an
+  unpublish through. The invariant itself stands.
 
 ### Corvus answers about everything Brandon, grounded in site content (#166)
 
@@ -184,13 +186,13 @@ source states none, it says so.
 What exists that could tell whether a journey works for real people. None is
 connected to the outcomes above yet; no tracking is added by documenting this.
 
-| Signal               | Route                        | What it can show                                                                                                          | Status                                                                                              |
-| -------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| GitHub issues        | `gh issue list`              | defects found by the owner and reviewers, e.g. `/articles` Back/Forward query staleness (#267, #302; follow-up #307 open) | read; the only reader-facing feedback on record is owner/reviewer-found                             |
-| Vercel Web Analytics | Vercel dashboard / connector | cookieless page views per route (`docs/ANALYTICS.md`), not usefulness                                                     | Aggregate inspection informs the #320 investigation; private traffic evidence is not published here |
-| GA4                  | GA4 property                 | sessions after consent where it is required, and by default where it is not (`docs/ANALYTICS.md`)                         | exists; not read                                                                                    |
-| Sentry               | Sentry project               | runtime errors on all three runtimes (`README.md` § Overview)                                                             | exists; not read                                                                                    |
-| Search Console       | owner's account              | indexing and crawl status (#210)                                                                                          | exists; owner-held                                                                                  |
+| Signal               | Route                        | What it can show                                                                                           | Status                                                                                              |
+| -------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| GitHub issues        | `gh issue list`              | defects found by the owner and reviewers, e.g. `/articles` Back/Forward query staleness (#267, #302, #307) | read; the only reader-facing feedback on record is owner/reviewer-found                             |
+| Vercel Web Analytics | Vercel dashboard / connector | cookieless page views per route (`docs/ANALYTICS.md`), not usefulness                                      | Aggregate inspection informs the #320 investigation; private traffic evidence is not published here |
+| GA4                  | GA4 property                 | sessions after consent where it is required, and by default where it is not (`docs/ANALYTICS.md`)          | exists; not read                                                                                    |
+| Sentry               | Sentry project               | runtime errors on all three runtimes (`README.md` § Overview)                                              | exists; not read                                                                                    |
+| Search Console       | owner's account              | indexing and crawl status (#210)                                                                           | exists; owner-held                                                                                  |
 
 There is no in-product feedback route (no survey, no feedback widget).
 Reading production analytics is an owner-authorized act, not part of routine

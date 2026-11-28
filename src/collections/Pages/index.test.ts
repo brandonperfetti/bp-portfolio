@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { Pages } from '@/collections/Pages'
+import { cascadePagePaths } from '@/collections/Pages/hooks/pageHierarchy'
 import { publicPathFor } from '@/fields/slug/slugPaths'
 
 /**
@@ -17,6 +18,15 @@ import { publicPathFor } from '@/fields/slug/slugPaths'
  *
  * The sibling for Posts is `src/collections/Posts/index.test.ts`.
  */
+
+// Tag the Corvus hooks so the order test below can find them; nothing in this
+// file runs a hook.
+vi.mock('@/hooks/corvusEmbeddings', () => ({
+  refreshCorvusEmbeddings: (collection: string) =>
+    Object.assign(async () => undefined, { corvusRefresh: collection }),
+  deleteCorvusEmbeddings: (collection: string) =>
+    Object.assign(async () => undefined, { corvusDelete: collection }),
+}))
 
 const defaultPopulate = Pages.defaultPopulate
 
@@ -59,5 +69,18 @@ describe('Pages defaultPopulate', () => {
     // projection. Confirmed here rather than assumed.
     const root = { id: 1, title: 'Home', slug: 'home', path: 'home' }
     expect(publicPathFor('pages', asPopulated(root))).toBe('/')
+  })
+})
+
+describe('Pages afterChange order (#208)', () => {
+  // The embedding writes commit outside the request's transaction, so a
+  // cascade failure that rolls a publish back must happen before them, or
+  // the rolled-back Page's text stays retrievable.
+  it('embeds last, after the path cascade', () => {
+    const hooks = (Pages.hooks?.afterChange ?? []) as unknown[]
+    const last = hooks.at(-1) as { corvusRefresh?: string } | undefined
+
+    expect(last?.corvusRefresh).toBe('pages')
+    expect(hooks.indexOf(cascadePagePaths)).toBe(hooks.length - 2)
   })
 })

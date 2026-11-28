@@ -136,7 +136,7 @@ export function TechCard({
             )}
             {signal ? (
               <span
-                className="mt-1 flex items-center gap-1.5 rounded-full bg-teal-50 px-2 py-1 text-[11px] font-medium text-teal-700 dark:bg-teal-950/50 dark:text-teal-300"
+                className="mt-1 flex items-center gap-1.5 rounded-full bg-badge-accent-surface px-2 py-1 text-[11px] font-medium text-badge-accent"
                 title={`Active in ${signal.repoCount} recent ${signal.repoCount === 1 ? 'repo' : 'repos'} on GitHub`}
               >
                 <SignalMeter intensity={signal.intensity} />

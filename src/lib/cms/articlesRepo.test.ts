@@ -421,7 +421,8 @@ describe('list payload size guard (#76 Phase 0)', () => {
   // stream and the `posts` cache entry. Before Phase 0, getPublishedPosts
   // cached the full Post[] incl. Lexical `content` — measured 2,352,427 bytes,
   // over Next's 2 MB data-cache per-item ceiling (issue #76 comment). The
-  // summary shape must stay well under 1 MB even at the 1000-post query ceiling,
+  // summary shape must stay well under 1 MB at a 1000-post sample (the read
+  // has no ceiling since #256; ~2,400 posts reach the 2 MB item limit),
   // and must never carry the body. Fixtures carry a large `content` on purpose:
   // proving the mapper (toSummary) drops it even when handed a full doc.
   const BODY_SENTINEL = 'BODY_SENTINEL_SHOULD_NEVER_APPEAR_IN_LIST_PAYLOAD'
@@ -453,7 +454,7 @@ describe('list payload size guard (#76 Phase 0)', () => {
       },
     })
 
-  it('keeps the serialized list payload under 1 MB at the 1000-post ceiling', async () => {
+  it('keeps the serialized list payload under 1 MB at a 1000-post sample', async () => {
     const posts = Array.from({ length: 1000 }, (_, i) => makeRealisticPost(i))
     getPublishedPostSummaries.mockResolvedValue(posts)
 

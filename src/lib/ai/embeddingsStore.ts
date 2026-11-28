@@ -272,6 +272,29 @@ export function isMetadataTightening(
 }
 
 /**
+ * Tightens the index's visibility in the content transaction. An old vector
+ * may become more restricted before re-embedding, but never less restricted.
+ */
+export async function tightenEmbeddingAccess(
+  db: CorvusEmbeddingsDb,
+  collection: 'pages' | 'posts',
+  docId: number,
+  visibility: string,
+  publishedAt: string | null,
+): Promise<void> {
+  await db.execute(sql`
+    UPDATE "corvus_embeddings"
+    SET "visibility" = CASE WHEN ${visibility} = 'gated' THEN 'gated' ELSE "visibility" END,
+        "published_at" = GREATEST("published_at", ${publishedAt}::timestamptz),
+        "updated_at" = now()
+    WHERE "collection" = ${collection} AND "doc_id" = ${docId}
+      AND (("visibility" = 'public' AND ${visibility} = 'gated')
+        OR (${publishedAt}::timestamptz IS NOT NULL
+          AND ("published_at" IS NULL OR "published_at" < ${publishedAt}::timestamptz)))
+  `)
+}
+
+/**
  * Correct a document's stored gating, schedule and cited URL without
  * re-embedding.
  *

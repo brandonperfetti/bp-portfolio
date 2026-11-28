@@ -10,6 +10,7 @@ import {
   corvusChatVariantHeightClass,
 } from '@/blocks/CorvusChat/variants'
 import { RenderBlocks } from '@/blocks/RenderBlocks'
+import { DefaultChatTransport } from 'ai'
 import type { Page } from '@/payload-types'
 
 type LayoutBlock = NonNullable<Page['layout']>[number]
@@ -354,5 +355,64 @@ describe('corvusChat block — the page-wide / shortcut (CodeRabbit #234)', () =
     fireEvent.keyDown(window, { key: '/' })
 
     expect(screen.getByLabelText('Message Corvus')).not.toHaveFocus()
+  })
+})
+
+/**
+ * #217 phase 2: the block hands its host document to the chat, at the root
+ * and through a container's column, which is the sticky-rail shape the block
+ * exists for. `DefaultChatTransport` is the module mock above, so its
+ * constructor arguments are what the real transport would be built with.
+ */
+describe('corvusChat block — page context (#217 phase 2)', () => {
+  const transportOptions = () =>
+    vi
+      .mocked(DefaultChatTransport)
+      .mock.calls.map((call) => call[0] as { body?: unknown })
+
+  beforeEach(() => {
+    vi.mocked(DefaultChatTransport).mockClear()
+  })
+
+  it('sends the host document a root-level block was composed on', () => {
+    render(
+      <RenderBlocks
+        blocks={[corvusChatBlock({ id: 'c1' })]}
+        hostDoc={{ collection: 'pages', id: 19 }}
+      />,
+    )
+
+    expect(transportOptions().at(-1)?.body).toEqual({
+      pageContext: { collection: 'pages', id: 19 },
+    })
+  })
+
+  it('sends it from inside a container column too', () => {
+    render(
+      <RenderBlocks
+        blocks={[
+          {
+            blockType: 'container',
+            columns: [
+              {
+                blockType: 'column',
+                content: [corvusChatBlock({ id: 'c1' })],
+              },
+            ],
+          } as unknown as LayoutBlock,
+        ]}
+        hostDoc={{ collection: 'posts', id: 7 }}
+      />,
+    )
+
+    expect(transportOptions().at(-1)?.body).toEqual({
+      pageContext: { collection: 'posts', id: 7 },
+    })
+  })
+
+  it('sends none when the caller cannot name a host', () => {
+    render(<RenderBlocks blocks={[corvusChatBlock({ id: 'c1' })]} />)
+
+    expect(transportOptions().at(-1)).not.toHaveProperty('body')
   })
 })

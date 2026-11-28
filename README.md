@@ -59,7 +59,7 @@ The active codebase for [brandonperfetti.com](https://brandonperfetti.com):
 - [Next.js 16](https://nextjs.org/) (App Router, Turbopack) · [React 19](https://react.dev/) · [TypeScript 5](https://www.typescriptlang.org/)
 - [Payload CMS 3](https://payloadcms.com/) — the single content source (Postgres via Drizzle/node-postgres; Supabase in staging/prod, default-deny RLS)
 - [Tailwind CSS v4](https://tailwindcss.com/) (CSS-first) + [shadcn/ui](https://ui.shadcn.com/) · [GSAP](https://gsap.com/) motion · [Swiper](https://swiperjs.com/) carousels · [shaders.com](https://shaders.com) hero
-- [Clerk](https://clerk.com/) end-user auth + server-side content gating · [Vercel AI SDK](https://sdk.vercel.ai/) (OpenAI `gpt-5-mini`; Anthropic optional) for Corvus, grounded by [pgvector](https://github.com/pgvector/pgvector) retrieval (`text-embedding-3-small`)
+- [Clerk](https://clerk.com/) end-user auth + server-side content gating · [Vercel AI SDK](https://sdk.vercel.ai/) (OpenAI `gpt-5.6-luna`; Anthropic optional) for Corvus, grounded by [pgvector](https://github.com/pgvector/pgvector) retrieval (`text-embedding-3-small`)
 - [c15t](https://c15t.com/) headless consent management + GA4 (Consent Mode v2) · [Vercel Analytics](https://vercel.com/analytics) cookieless baseline
 - [Upstash Redis](https://upstash.com/) rate limiting + chat quotas · [Resend](https://resend.com/) email · [Sentry](https://sentry.io/) monitoring · [Vercel Blob](https://vercel.com/storage/blob) media
 - [Vitest](https://vitest.dev/) unit/component · [Storybook 10](https://storybook.js.org/) with interaction + a11y tests · [Playwright](https://playwright.dev/) e2e · [Evalite](https://evalite.dev/) AI evals
@@ -69,15 +69,52 @@ The active codebase for [brandonperfetti.com](https://brandonperfetti.com):
 
 ```bash
 nvm use                      # or fnm/asdf — .nvmrc pins Node 24
-corepack enable              # honors the pnpm@11 packageManager pin
+corepack enable              # honors the pnpm@12 packageManager pin
 cp .env.example .env.local   # then fill in what you need (comments explain each var)
 pnpm install
 pnpm migrate                 # applies the committed migration chain to DATABASE_URI
-pnpm dev                     # http://localhost:3000 · admin at /admin
+pnpm dev                     # http://localhost:6002 · admin at /admin
 ```
 
 The app boots with only a database — everything else stays inert until its keys
 exist (see below).
+
+### Local ports
+
+BP Portfolio owns the **6000–6029** port family for local development (#285),
+so it runs beside the other Sans Faux projects with stable URLs:
+
+| Port   | What                                                                                       | Override                        |
+| ------ | ------------------------------------------------------------------------------------------ | ------------------------------- |
+| `6000` | Reserved, never used: browsers, Node and Next refuse it                                    | —                               |
+| `6001` | Playwright's managed server and `use.baseURL`; the reader-journey lab (fixed, no override) | `BP_E2E_PORT` (Playwright only) |
+| `6002` | `pnpm dev`, the normal app entrypoint                                                      | `BP_DEV_PORT`                   |
+| `6006` | `pnpm storybook`                                                                           | `BP_STORYBOOK_PORT`             |
+
+The family was assigned with the app on `6000`; that is X11's port, which
+Chromium (`ERR_UNSAFE_PORT`), Node's `fetch` (`bad port`) and Next itself
+(`Bad port: "6000" is reserved for x11`) all refuse, so the app sits on `6002`.
+
+All three come through `scripts/local-server.mjs`, which passes the port
+explicitly and checks it first: **an occupied port stops the command with an
+error naming the override; nothing moves to the next free port.** Playwright
+never reuses a server it did not start, so free `6001` before
+`pnpm test:e2e`. Next also allows one `next dev` per
+checkout, so a local (non-`CI`) e2e run needs `pnpm dev` stopped in that
+checkout.
+
+For a parallel worktree, pick any free port in `6001–6029` that is not one of
+the defaults, and set it on the command only, so the defaults stay as they are:
+
+```bash
+BP_DEV_PORT=6012 pnpm dev
+BP_E2E_PORT=6011 pnpm test:e2e
+BP_STORYBOOK_PORT=6016 pnpm storybook
+```
+
+An override outside the family, or `6000`, is refused. Point
+`NEXT_PUBLIC_SITE_URL` at a `pnpm dev` override's port if the page needs
+canonical URLs that match it.
 
 Need a database, or real content to work against? `docker-compose.yml` starts a
 local Postgres on the same image CI uses, and `pnpm db:local:refresh` restores

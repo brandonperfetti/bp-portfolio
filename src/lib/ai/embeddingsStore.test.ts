@@ -803,6 +803,34 @@ describe('syncDocumentEmbeddings', () => {
     expect(sql()[0].text).toContain('DELETE FROM "corvus_embeddings"')
   })
 
+  it("DELETES a draft Page's rows even when it carries embeddable prose (#208)", async () => {
+    const { db, sql } = fakeDb()
+    const prose = {
+      blockType: 'prose',
+      content: {
+        root: {
+          children: [
+            {
+              type: 'paragraph',
+              children: [{ type: 'text', text: 'unreleased '.repeat(80) }],
+            },
+          ],
+        },
+      },
+    }
+
+    const result = await syncDocumentEmbeddings({
+      db,
+      collection: 'pages',
+      doc: { id: 31, title: 'Draft role', _status: 'draft', layout: [prose] },
+    })
+
+    expect(result.deleted).toBe(1)
+    expect(result.written).toBe(0)
+    expect(embedChunksMock).not.toHaveBeenCalled()
+    expect(sql()[0].text).toContain('DELETE FROM "corvus_embeddings"')
+  })
+
   it('deletes rows for a document that now yields no chunks at all', async () => {
     const { db, sql } = fakeDb()
 

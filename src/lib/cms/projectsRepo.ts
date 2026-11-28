@@ -23,8 +23,9 @@ export const getCmsProjects = async (): Promise<CmsEntityItem[] | null> => {
   const { docs } = await payload.find({
     collection: 'projects',
     depth: 1,
-    limit: 200,
+    limit: 0,
     overrideAccess: false,
+    pagination: false,
     sort: 'sortOrder',
   })
   if (!docs.length) return null

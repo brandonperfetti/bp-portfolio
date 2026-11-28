@@ -5,9 +5,10 @@
 - **pnpm only** — enforced by `preinstall: npx only-allow pnpm` and the
   `packageManager` pin (Corepack). Vercel needs
   `ENABLE_EXPERIMENTAL_COREPACK=1`.
-- pnpm 11 settings live in `pnpm-workspace.yaml` (overrides + `allowBuilds`
+- pnpm settings live in `pnpm-workspace.yaml` (overrides + `allowBuilds`
   with real boolean values). Native-build approvals go there, not
-  package.json.
+  package.json. pnpm 12 fails a command on a key there it does not
+  recognize, so a misspelled setting errors instead of sitting inert.
 - A release-age gate is in force (#222): pnpm will not resolve a version
   published less than a day ago — `docs/DEPENDENCIES.md` § Release-age gate.
 - Dependency majors are pinned. All `payload` + `@payloadcms/*` packages move
@@ -130,11 +131,9 @@ Two properties of this tier decide how its fixtures must be written:
 - Branches touching the Corvus eval harness or eval-adjacent config
   (`evals/**`, guardrails, eval scripts/workflow) get **one keyed local
   `pnpm eval:ci` run before push** (Brandon runs it) — CI's first keyed run
-  must not be the first observation of eval behavior. Export
-  `AI_CHAT_MODEL=gpt-5.6-luna` for that run: the CI job pins the gate to the
-  model production runs (`ci.yml`, `evals` job env; `docs/AI.md`, the
-  2026-09-15 correction), and a run on the code default `gpt-5-mini` measures
-  a model we do not ship. The floors themselves
+  must not be the first observation of eval behavior. Leave `AI_CHAT_MODEL` and
+  `AI_CHAT_PROVIDER` unset for that run, as the CI job does: the OpenAI default,
+  `gpt-5.6-luna`, is the model the gate measures (#238). The floors themselves
   are invariants (see `CLAUDE.md`): fix the behavior or the harness, never
   lower a floor to get green.
 

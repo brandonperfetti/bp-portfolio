@@ -1,6 +1,7 @@
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -16,6 +17,8 @@ import {
   it,
   vi,
 } from 'vitest'
+
+import Link from 'next/link'
 
 import { ArticlesExplorer } from '@/components/articles/ArticlesExplorer'
 import type { ArticleWithSlug } from '@/lib/articles'
@@ -89,7 +92,41 @@ vi.mock('@/components/motion/HoverMotionCard', () => ({
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
+
+/**
+ * Puts the test on a fake clock (#335). The explorer's 500 ms search debounce
+ * then settles only when the test advances time. On the real clock, a busy
+ * machine stretched the gap between two simulated keystrokes past the
+ * debounce, which then settled mid-word and wrote a URL the test never asked
+ * for, or ran a wait for the settled list past its window. `Date` is faked
+ * with the timers, so the pending-write TTL reads the same clock.
+ *
+ * Testing Library drains its async wrapper (which every user-event call runs
+ * in) with a `setTimeout(0)`, and advances that timer only when it sees Jest:
+ * a `jest` global and a faked `setTimeout`. Without the stand-in below every
+ * user-event call waits forever on a Vitest fake clock; with it the drain
+ * moves the clock by 0 ms, so no debounce can fire. Tests on this clock still
+ * move time with {@link advance} and assert synchronously.
+ *
+ * @returns A user-event instance whose own waits run on the fake clock.
+ */
+function useFakeClock() {
+  vi.useFakeTimers()
+  vi.stubGlobal('jest', {
+    advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms),
+  })
+  return userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+}
+
+/** Moves the fake clock on by `ms` and flushes the renders its timers cause. */
+async function advance(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms)
+  })
+}
 
 describe('ArticlesExplorer', () => {
   it.each([
@@ -106,7 +143,7 @@ describe('ArticlesExplorer', () => {
   ])(
     'offers recovery for "%s" while preserving the substring search contract',
     async (miss, match, title) => {
-      const user = userEvent.setup()
+      const user = useFakeClock()
       // Observed titles, controlled metadata: this checks the search contract,
       // not the production corpus or whether a human finds the article useful.
       render(
@@ -129,9 +166,10 @@ describe('ArticlesExplorer', () => {
         screen.getByRole('button', { name: 'Engineering' }),
       ).toBeInTheDocument()
       await user.type(search, miss)
-      await screen.findByText(
-        `No articles found for the search term "${miss}".`,
-      )
+      await advance(500)
+      expect(
+        screen.getByText(`No articles found for the search term "${miss}".`),
+      ).toBeInTheDocument()
       expect(search).toHaveValue(miss)
       expect(
         screen.queryByRole('button', { name: 'Engineering' }),
@@ -142,7 +180,10 @@ describe('ArticlesExplorer', () => {
 
       await user.clear(search)
       await user.type(search, match)
-      await screen.findByRole('link', { name: `Read article: ${title}` })
+      await advance(500)
+      expect(
+        screen.getByRole('link', { name: `Read article: ${title}` }),
+      ).toBeInTheDocument()
       expect(
         screen.queryByText(
           'Try fewer words, a technology name, or clear your search to browse topics.',
@@ -151,9 +192,10 @@ describe('ArticlesExplorer', () => {
 
       await user.clear(search)
       await user.type(search, miss)
-      await screen.findByText(
-        `No articles found for the search term "${miss}".`,
-      )
+      await advance(500)
+      expect(
+        screen.getByText(`No articles found for the search term "${miss}".`),
+      ).toBeInTheDocument()
       expect(
         screen.getByText(
           'Try fewer words, a technology name, or clear your search to browse topics.',
@@ -161,9 +203,7 @@ describe('ArticlesExplorer', () => {
       ).toBeInTheDocument()
 
       await user.clear(search)
-      await user.click(
-        await screen.findByRole('button', { name: 'Engineering' }),
-      )
+      await user.click(screen.getByRole('button', { name: 'Engineering' }))
       expect(search).toHaveValue('')
       expect(
         screen.getByRole('link', { name: `Read article: ${title}` }),
@@ -205,7 +245,7 @@ describe('ArticlesExplorer', () => {
   })
 
   it('filters visible cards by search query', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const articles: ArticleWithSlug[] = [
       {
         slug: 'react-form-zod',
@@ -233,11 +273,10 @@ describe('ArticlesExplorer', () => {
 
     const searchInput = screen.getByPlaceholderText('Search articles')
     await user.type(searchInput, 'postgresql')
+    await advance(500)
 
-    await waitFor(() => {
-      expect(screen.getByText('Pagination with PostgreSQL')).toBeInTheDocument()
-      expect(screen.queryByText('React Forms with Zod')).not.toBeInTheDocument()
-    })
+    expect(screen.getByText('Pagination with PostgreSQL')).toBeInTheDocument()
+    expect(screen.queryByText('React Forms with Zod')).not.toBeInTheDocument()
   })
 
   it('filters visible cards by selected topic chip', async () => {
@@ -417,18 +456,14 @@ describe('ArticlesExplorer pagination (#88)', () => {
   })
 
   it('drops ?page when the search query changes', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     searchParamsMock = new URLSearchParams('page=2')
     render(<ArticlesExplorer articles={makeArticles(ARTICLES_PAGE_SIZE + 1)} />)
 
     await user.type(screen.getByPlaceholderText('Search articles'), 'article 3')
 
-    await waitFor(
-      () => {
-        expect(replaceMock).toHaveBeenCalled()
-      },
-      { timeout: 2000 },
-    )
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     const [href] = replaceMock.mock.calls.at(-1) as [string]
     expect(href).toContain('q=article')
     expect(href).not.toContain('page=')
@@ -707,6 +742,7 @@ describe('ArticlesExplorer URL writes per burst (#249, #267)', () => {
   })
 
   it('issues zero writes for a burst of ten Back/Forward traversals', async () => {
+    useFakeClock()
     const { rerender } = render(<ArticlesExplorer articles={taggedArticles} />)
 
     for (let i = 0; i < 10; i++) {
@@ -716,27 +752,26 @@ describe('ArticlesExplorer URL writes per burst (#249, #267)', () => {
       rerender(<ArticlesExplorer articles={taggedArticles} />)
     }
     // Past the 500 ms debounce, so a pending write would have landed.
-    await new Promise((resolve) => setTimeout(resolve, 650))
+    await advance(650)
 
     expect(replaceMock).not.toHaveBeenCalled()
   })
 
   it('a chip tap inside the typing debounce writes once, not twice', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     render(<ArticlesExplorer articles={taggedArticles} />)
 
     await user.type(screen.getByPlaceholderText('Search articles'), 'react')
     await user.click(screen.getByRole('button', { name: 'Leadership' }))
+    // No time has passed, so the tap is inside the debounce: nothing yet.
+    expect(replaceMock).not.toHaveBeenCalled()
 
-    await waitFor(
-      () => {
-        expect(replaceMock).toHaveBeenCalledWith(
-          '/articles?q=react&topic=Leadership',
-          { scroll: false },
-        )
-      },
-      { timeout: 2000 },
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledWith(
+      '/articles?q=react&topic=Leadership',
+      { scroll: false },
     )
+    await advance(1000)
     expect(replaceMock).toHaveBeenCalledTimes(1)
   })
 
@@ -745,27 +780,22 @@ describe('ArticlesExplorer URL writes per burst (#249, #267)', () => {
     // for 500 ms. A clear inside that window returned the filters to the state
     // the write gate last recorded (''), so the gate skipped the write: an
     // unfiltered list under `?q=react` (#267's note on `94d1fcc`).
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    try {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-      const { rerender } = render(
-        <ArticlesExplorer articles={taggedArticles} />,
-      )
+    // The clear lands at the same fake instant as the traversal, so it is
+    // inside the window on any machine.
+    const user = useFakeClock()
+    const { rerender } = render(<ArticlesExplorer articles={taggedArticles} />)
 
-      searchParamsMock = new URLSearchParams('q=react')
-      rerender(<ArticlesExplorer articles={taggedArticles} />)
-      const box = screen.getByPlaceholderText('Search articles')
-      expect(box).toHaveValue('react')
+    searchParamsMock = new URLSearchParams('q=react')
+    rerender(<ArticlesExplorer articles={taggedArticles} />)
+    const box = screen.getByPlaceholderText('Search articles')
+    expect(box).toHaveValue('react')
 
-      await user.clear(box)
-      await vi.advanceTimersByTimeAsync(650)
+    await user.clear(box)
+    await advance(650)
 
-      expect(box).toHaveValue('')
-      expect(replaceMock).toHaveBeenCalledWith('/articles', { scroll: false })
-      expect(replaceMock).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(box).toHaveValue('')
+    expect(replaceMock).toHaveBeenCalledWith('/articles', { scroll: false })
+    expect(replaceMock).toHaveBeenCalledTimes(1)
   })
 
   it('still rewrites a non-canonical URL once on load', async () => {
@@ -785,7 +815,7 @@ describe('ArticlesExplorer URL writes per burst (#249, #267)', () => {
   })
 
   it('a type-and-clear burst on a clean URL issues no writes at all', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     render(<ArticlesExplorer articles={taggedArticles} />)
     const box = screen.getByPlaceholderText('Search articles')
 
@@ -793,7 +823,7 @@ describe('ArticlesExplorer URL writes per burst (#249, #267)', () => {
       await user.type(box, 're')
       await user.clear(box)
     }
-    await new Promise((resolve) => setTimeout(resolve, 650))
+    await advance(650)
 
     expect(replaceMock).not.toHaveBeenCalled()
   })
@@ -859,9 +889,10 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
 
   it('a Back/Forward that changes only q syncs the focused input, the URL and the list (#302)', async () => {
     searchParamsMock = new URLSearchParams('q=observer')
+    const user = useFakeClock()
     const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
     const box = screen.getByPlaceholderText('Search articles')
-    await userEvent.setup().click(box)
+    await user.click(box)
     expect(box).toHaveFocus()
     expect(box).toHaveValue('observer')
 
@@ -869,53 +900,46 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
 
     expect(box).toHaveFocus()
     expect(box).toHaveValue('postgresql')
-    await waitFor(
-      () => {
-        expect(
-          screen.getByText('Pagination with PostgreSQL'),
-        ).toBeInTheDocument()
-        expect(
-          screen.queryByText('Observer Pattern in React'),
-        ).not.toBeInTheDocument()
-      },
-      { timeout: 2000 },
-    )
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(500)
+    expect(screen.getByText('Pagination with PostgreSQL')).toBeInTheDocument()
+    expect(
+      screen.queryByText('Observer Pattern in React'),
+    ).not.toBeInTheDocument()
+    await advance(700)
     expect(replaceMock).not.toHaveBeenCalled()
   })
 
   it('a Back/Forward that changes q and another filter writes nothing over the entry (#302)', async () => {
     searchParamsMock = new URLSearchParams('q=observer')
+    const user = useFakeClock()
     const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
     const box = screen.getByPlaceholderText('Search articles')
-    await userEvent.setup().click(box)
+    await user.click(box)
 
     traverseTo(rerender, 'topic=Databases')
 
     expect(box).toHaveFocus()
     expect(box).toHaveValue('')
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(700)
     expect(replaceMock).not.toHaveBeenCalled()
   })
 
   it("typing is never overwritten by the echo of the explorer's own write (#302)", async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
     const box = screen.getByPlaceholderText('Search articles')
 
     await user.type(box, 'react')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     // The reader keeps typing while that write is still in flight.
     await user.type(box, 'x')
     landNext(rerender)
 
     expect(box).toHaveFocus()
     expect(box).toHaveValue('reactx')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2), {
-      timeout: 2000,
-    })
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(2)
     expect(replaceMock).toHaveBeenLastCalledWith('/articles?q=reactx', {
       scroll: false,
     })
@@ -924,14 +948,13 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
   })
 
   it("F1: a clear made while the explorer's own write is in flight converges the URL and the list", async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
     const box = screen.getByPlaceholderText('Search articles')
 
     await user.type(box, 'react')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     expect(replaceMock).toHaveBeenLastCalledWith('/articles?q=react', {
       scroll: false,
     })
@@ -944,7 +967,7 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
     while (inFlight.length > 0) {
       landNext(rerender)
     }
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(700)
     while (inFlight.length > 0) {
       landNext(rerender)
     }
@@ -958,20 +981,20 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
   })
 
   it('F1: the same holds when Next skips the first URL and lands only the last', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
     const box = screen.getByPlaceholderText('Search articles')
 
     await user.type(box, 'react')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     await user.clear(box)
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2))
+    await advance(0)
+    expect(replaceMock).toHaveBeenCalledTimes(2)
 
     inFlight.shift()
     landNext(rerender)
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(700)
 
     expect(box).toHaveValue('')
     expect(searchParamsMock.get('q') ?? '').toBe('')
@@ -979,41 +1002,39 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
   })
 
   it('a traversal after the write has landed is not mistaken for its echo', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
     const box = screen.getByPlaceholderText('Search articles')
 
     await user.type(box, 'react')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     landNext(rerender)
     traverseTo(rerender, '')
     expect(box).toHaveValue('')
     traverseTo(rerender, 'q=react')
     expect(box).toHaveValue('react')
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(700)
     expect(replaceMock).toHaveBeenCalledTimes(1)
   })
   it('N1: a write Next dropped cannot swallow a later in-app navigation to the same URL', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
     const box = screen.getByPlaceholderText('Search articles')
 
     await user.type(box, 'react')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     await user.clear(box)
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(2))
+    await advance(0)
+    expect(replaceMock).toHaveBeenCalledTimes(2)
     // Next discards the earlier pending replace, and the second is a no-op
     // navigation to the confirmed URL: neither ever lands.
     inFlight = []
 
     await user.type(box, 'react')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(3), {
-      timeout: 2000,
-    })
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(3)
     landNext(rerender)
     expect(searchParamsMock.get('q')).toBe('react')
 
@@ -1029,6 +1050,9 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
   })
 
   it('pins the 10 s bound: an echo inside it is not a destination, one past it is (N3)', async () => {
+    // The clock goes first: it replaces `Date`, so the spy must sit on the
+    // fake one the hook reads.
+    const user = useFakeClock()
     const now = vi.spyOn(Date, 'now')
     const base = Date.now()
     try {
@@ -1040,16 +1064,14 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
         replaceMock.mockClear()
         searchParamsMock = new URLSearchParams('')
         now.mockReturnValue(base)
-        const user = userEvent.setup()
         const { rerender, unmount } = render(
           <ArticlesExplorer articles={focusArticles} />,
         )
         const box = screen.getByPlaceholderText('Search articles')
 
         await user.type(box, 'react')
-        await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-          timeout: 2000,
-        })
+        await advance(500)
+        expect(replaceMock).toHaveBeenCalledTimes(1)
         now.mockReturnValue(base + lateMs)
         await user.type(box, 'x')
         landNext(rerender)
@@ -1063,14 +1085,13 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
   })
 
   it('the popstate listener forgets pending writes, so a traversal to the in-flight URL is a destination (N2)', async () => {
-    const user = userEvent.setup()
+    const user = useFakeClock()
     const { rerender } = render(<ArticlesExplorer articles={focusArticles} />)
     const box = screen.getByPlaceholderText('Search articles')
 
     await user.type(box, 'react')
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledTimes(1), {
-      timeout: 2000,
-    })
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
     // The reader types on (debounce pending), then goes Back to an entry whose
     // URL is the one in flight; Next discards the in-flight replace.
     await user.type(box, 'x')
@@ -1081,7 +1102,188 @@ describe('ArticlesExplorer focused input and URL changes (#302, release finding 
     traverseTo(rerender, 'q=react')
 
     expect(box).toHaveValue('react')
-    await new Promise((resolve) => setTimeout(resolve, 700))
+    await advance(700)
     expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * The page as Next renders it on a link click to the URL already showing
+   * (#307): the explorer beside a link to `/articles`. `next/link` stops the
+   * browser's own navigation and routes in-app; the suite's `next/link` mock
+   * renders a bare `<a>`, so the `onClick` here stands in for that.
+   */
+  function PageWithSameUrlLink() {
+    return (
+      <>
+        <Link href="/articles" onClick={(event) => event.preventDefault()}>
+          All articles
+        </Link>
+        <ArticlesExplorer articles={focusArticles} />
+      </>
+    )
+  }
+
+  it('a link to the URL already showing, clicked while a write is pending, puts the input back in step (#307)', async () => {
+    const user = useFakeClock()
+    const { rerender } = render(<PageWithSameUrlLink />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    await user.type(box, 'observer')
+    await advance(500)
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+    const showing = searchParamsMock
+
+    await user.click(screen.getByRole('link', { name: 'All articles' }))
+    // Measured on a production build in Chromium and WebKit (#307): the link's
+    // navigation supersedes the pending replace, the URL stays `/articles`,
+    // and Next hands back the same memoised params object, so no URL change
+    // reaches the explorer.
+    inFlight = []
+    act(() => rerender(<PageWithSameUrlLink />))
+    expect(searchParamsMock).toBe(showing)
+
+    expect(box).toHaveValue('')
+    await advance(1000)
+    expect(screen.getByText('Observer Pattern in React')).toBeInTheDocument()
+    expect(screen.getByText('Pagination with PostgreSQL')).toBeInTheDocument()
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('a click on that link while the debounce is still running drops the unsent text (#307)', async () => {
+    const user = useFakeClock()
+    render(<PageWithSameUrlLink />)
+    const box = screen.getByPlaceholderText('Search articles')
+
+    await user.type(box, 'obs')
+    await user.click(screen.getByRole('link', { name: 'All articles' }))
+
+    expect(box).toHaveValue('')
+    await advance(1000)
+    expect(replaceMock).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Clicks that do not load the URL already showing in this tab: each must
+   * leave the typed query and its pending write alone (#307).
+   */
+  const otherClicks: Array<
+    [
+      string,
+      (
+        link: HTMLElement,
+        user: ReturnType<typeof useFakeClock>,
+      ) => Promise<void>,
+    ]
+  > = [
+    [
+      'a modified click (new tab)',
+      async (link, user) => {
+        await user.keyboard('{Meta>}')
+        await user.click(link)
+        await user.keyboard('{/Meta}')
+      },
+    ],
+    [
+      // Browsers send other buttons as `auxclick`; a `click` carrying one is
+      // what the listener's button check is for.
+      'a click from a non-primary button',
+      async (link) => {
+        fireEvent.click(link, { button: 1 })
+      },
+    ],
+    [
+      'a link that opens another tab',
+      async (link, user) => {
+        link.setAttribute('target', '_blank')
+        await user.click(link)
+      },
+    ],
+    [
+      'a download link',
+      async (link, user) => {
+        link.setAttribute('download', '')
+        await user.click(link)
+      },
+    ],
+    [
+      'a fragment link on the same page',
+      async (link, user) => {
+        link.setAttribute('href', '/articles#latest')
+        await user.click(link)
+      },
+    ],
+    [
+      'an empty-fragment link on the same page',
+      async (link, user) => {
+        link.setAttribute('href', '/articles#')
+        await user.click(link)
+      },
+    ],
+    [
+      'a link to another origin',
+      async (link, user) => {
+        link.setAttribute('href', 'https://example.com/articles')
+        await user.click(link)
+      },
+    ],
+  ]
+
+  it.each(otherClicks)(
+    '%s leaves the filters alone (#307)',
+    async (_name, clickLink) => {
+      const user = useFakeClock()
+      render(<PageWithSameUrlLink />)
+      const box = screen.getByPlaceholderText('Search articles')
+
+      await user.type(box, 'observer')
+      await advance(500)
+      await clickLink(screen.getByRole('link', { name: 'All articles' }), user)
+
+      expect(box).toHaveValue('observer')
+    },
+  )
+})
+
+describe('ArticlesExplorer cover loading (#218)', () => {
+  /** Articles that each carry a cover, so every card renders an image. */
+  const withCovers = (count: number) =>
+    makeArticles(count).map((article, index) => ({
+      ...article,
+      image: `https://example.com/cover-${index + 1}.png`,
+    }))
+
+  it('loads only the first cover eagerly, at high fetch priority', () => {
+    render(<ArticlesExplorer articles={withCovers(4)} />)
+    const covers = screen.getAllByRole('img')
+    expect(covers).toHaveLength(4)
+    const [lead, ...rest] = covers
+    expect(lead).toHaveAttribute('loading', 'eager')
+    expect(lead).toHaveAttribute('fetchPriority', 'high')
+    // The rest keep next/image's default lazy loading: no eager hint, no
+    // raised priority. Marking the grid eager would compete with the LCP.
+    for (const cover of rest) {
+      expect(cover).not.toHaveAttribute('loading', 'eager')
+      expect(cover).not.toHaveAttribute('fetchPriority')
+    }
+  })
+
+  it('gives the hints to the first cover even when the lead card has none', () => {
+    const [bare, ...covered] = withCovers(3)
+    const { image: _omit, ...noCover } = bare
+    render(<ArticlesExplorer articles={[noCover, ...covered]} />)
+    const covers = screen.getAllByRole('img')
+    expect(covers).toHaveLength(2)
+    expect(covers[0]).toHaveAttribute('loading', 'eager')
+    expect(covers[0]).toHaveAttribute('fetchPriority', 'high')
+    expect(covers[1]).not.toHaveAttribute('loading', 'eager')
+  })
+
+  it('makes the first cover of a later page the eager one', () => {
+    searchParamsMock = new URLSearchParams('page=2')
+    render(<ArticlesExplorer articles={withCovers(ARTICLES_PAGE_SIZE + 2)} />)
+    const covers = screen.getAllByRole('img')
+    expect(covers).toHaveLength(2)
+    expect(covers[0]).toHaveAttribute('loading', 'eager')
+    expect(covers[1]).not.toHaveAttribute('loading', 'eager')
   })
 })

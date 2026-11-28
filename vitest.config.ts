@@ -52,8 +52,11 @@ export default defineConfig({
           // Node's, so `vi.resetModules()` gives a test fresh copies of
           // them. `ClerkClientProvider.resume.test.tsx` needs that to stand
           // for a cold server, whose Clerk modules have not loaded yet
-          // (BP-PORTFOLIO-S).
-          server: { deps: { inline: [/@clerk\//] } },
+          // (BP-PORTFOLIO-S). c15t is inlined for the same reason: it keeps
+          // its consent store in a module-level cache, so a test that stands
+          // for a fresh page load needs a fresh copy of it
+          // (`ConsentManager.histories.test.tsx`, #375).
+          server: { deps: { inline: [/@clerk\//, /c15t/] } },
         },
       },
       {

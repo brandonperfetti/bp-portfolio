@@ -344,7 +344,7 @@ evalite('Corvus subjects · "you" means CORVUS', {
       // answer rather than a detail the model may reasonably hedge away.
       input: 'Which model do you run on by default?',
       expected:
-        'My chat model is env-selected; by default it is OpenAI\'s "gpt-5-mini", with Anthropic as the alternative provider. More about how I work is on "/corvus".',
+        'My chat model is env-selected; by default it is OpenAI\'s "gpt-5.6-luna", with Anthropic as the alternative provider. More about how I work is on "/corvus".',
     },
     {
       // "What can you ANSWER…" was the first draft and `isAboutCorvusQuestion`
