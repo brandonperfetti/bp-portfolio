@@ -1,3 +1,5 @@
+import type { Event, Log } from '@sentry/nextjs'
+
 /**
  * Shared Sentry configuration read by every runtime entrypoint
  * (`instrumentation-client.ts`, `sentry.server.config.ts`,
@@ -22,8 +24,8 @@
  * deliberately **ignored** rather than honoured. See that function for the
  * full matrix.
  *
- * This module is intentionally framework-free (no `@sentry/nextjs` import)
- * so it stays trivially unit-testable without mocking the SDK.
+ * This module uses Sentry's types only. The entrypoints load and initialize
+ * the runtime SDK.
  */
 
 /**
@@ -405,9 +407,7 @@ export function sentryTracesSampler(samplingContext: {
  * actually wants there. Exported as a single constant so the three
  * runtime entrypoints (`instrumentation-client.ts`,
  * `sentry.server.config.ts`, `sentry.edge.config.ts`) can't drift from
- * each other. This module stays framework-free (no `@sentry/nextjs`
- * import) — the entrypoints own the actual
- * `Sentry.consoleLoggingIntegration(...)` call.
+ * each other. The entrypoints call `Sentry.consoleLoggingIntegration(...)`.
  */
 export const SENTRY_CONSOLE_LOG_LEVELS = ['warn', 'error'] as const
 
@@ -538,9 +538,8 @@ export function isFilteredUserAgent(
 }
 
 /**
- * Minimal structural shapes so the shared Sentry hooks below stay framework-
- * free (no `@sentry/nextjs` import) and unit-testable. The runtime configs pass
- * the SDK's real `ErrorEvent` / `Log`, which structurally satisfy these.
+ * The filter hooks need only the request headers and log message. The
+ * SDK's `ErrorEvent` and `Log` satisfy these shapes.
  */
 type SentryEventLike = {
   request?: { headers?: Record<string, string | undefined> }
@@ -818,6 +817,73 @@ export function sentryRedactEventRequest<E extends SentryEventRequestLike>(
     request.data = JSON.stringify(redactValue(parsed))
   }
   return { ...event, request }
+}
+
+/**
+ * Redact request data and browser event text before error or trace transport.
+ * A navigation can put its URL in the transaction name as well as the request.
+ */
+export function sentryRedactBrowserEvent<E extends Event>(event: E): E {
+  const redacted = sentryRedactEventRequest(event)
+  const {
+    message,
+    logentry,
+    transaction,
+    exception,
+    breadcrumbs,
+    sdkProcessingMetadata,
+  } = redacted
+  // The SDK copies this name into the envelope's trace header.
+  const samplingContext = sdkProcessingMetadata?.dynamicSamplingContext
+
+  return {
+    ...redacted,
+    ...(message !== undefined
+      ? { message: redactEmailAddresses(message) }
+      : {}),
+    ...(logentry ? { logentry: redactRecord(logentry) } : {}),
+    ...(transaction !== undefined
+      ? { transaction: redactEmailAddresses(transaction) }
+      : {}),
+    ...(samplingContext?.transaction !== undefined
+      ? {
+          sdkProcessingMetadata: {
+            ...sdkProcessingMetadata,
+            dynamicSamplingContext: {
+              ...samplingContext,
+              transaction: redactEmailAddresses(samplingContext.transaction),
+            },
+          },
+        }
+      : {}),
+    ...(exception?.values
+      ? {
+          exception: {
+            ...exception,
+            values: exception.values.map((value) =>
+              value.value === undefined
+                ? value
+                : { ...value, value: redactEmailAddresses(value.value) },
+            ),
+          },
+        }
+      : {}),
+    ...(breadcrumbs
+      ? { breadcrumbs: breadcrumbs.map(sentryRedactBreadcrumb) }
+      : {}),
+  }
+}
+
+/**
+ * Redact a log body and its attributes. Sentry copies template parameters
+ * into attributes before calling the hook.
+ */
+export function sentryRedactLog(log: Log): Log {
+  return {
+    ...log,
+    message: redactEmailAddresses(String(log.message)),
+    ...(log.attributes ? { attributes: redactRecord(log.attributes) } : {}),
+  }
 }
 
 /** A JSON object or array parsed from `text`, else `undefined`. */

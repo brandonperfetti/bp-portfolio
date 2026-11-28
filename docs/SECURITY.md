@@ -492,6 +492,10 @@ stay there.
     message and stack, functions are dropped, and a container nested
     deeper is replaced with `[redacted]` [source:
     `src/lib/observability/sentryConfig.ts`, `redactEmailAddresses`].
+  - The browser applies the same request, breadcrumb and span redaction.
+    It also redacts email addresses from event messages and exception
+    values, transaction names including the envelope trace header, and
+    log messages and attributes (#480).
   - `clientTelemetry.ts` sends a speech-recognition error code and a
     boolean [source: `src/lib/observability/clientTelemetry.ts:36-39`].
 - **A mailing-list contact is captured only with consent.** The contact

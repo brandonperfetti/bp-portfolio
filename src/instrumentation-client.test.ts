@@ -139,3 +139,90 @@ describe('instrumentation-client: distinct-session id (#213)', () => {
     expect(beforeSend({})).toBeNull()
   })
 })
+
+describe('instrumentation-client: email redaction (#480)', () => {
+  it('redacts addresses from outgoing errors, transactions, breadcrumbs, spans and logs', async () => {
+    stubProduction()
+    stubUserAgent('Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/140')
+    await import('./instrumentation-client')
+
+    const options = init.mock
+      .calls[0]![0] as import('@sentry/nextjs').BrowserOptions
+    const email = 'example+test@example.com'
+    const url = 'https://example.test/?email=example+test%40example.com'
+    const request = { url }
+
+    const event = options.beforeSend!(
+      {
+        type: undefined,
+        request,
+        message: `Failed for ${email}`,
+        exception: { values: [{ type: 'Error', value: email }] },
+      },
+      {},
+    )
+    expect(event).toMatchObject({
+      request: { url: 'https://example.test/?email=[email]' },
+      message: 'Failed for [email]',
+      exception: { values: [{ type: 'Error', value: '[email]' }] },
+    })
+
+    expect(
+      options.beforeSendTransaction!(
+        {
+          type: 'transaction',
+          transaction: url,
+          request,
+          sdkProcessingMetadata: {
+            dynamicSamplingContext: { transaction: url, trace_id: 'trace' },
+          },
+        },
+        {},
+      ),
+    ).toMatchObject({
+      transaction: 'https://example.test/?email=[email]',
+      sdkProcessingMetadata: {
+        dynamicSamplingContext: {
+          transaction: 'https://example.test/?email=[email]',
+          trace_id: 'trace',
+        },
+      },
+      request: { url: 'https://example.test/?email=[email]' },
+    })
+
+    expect(
+      options.beforeBreadcrumb!({ message: email, data: { to: url } }),
+    ).toEqual({
+      message: '[email]',
+      data: { to: 'https://example.test/?email=[email]' },
+    })
+
+    expect(
+      options.beforeSendSpan!({
+        trace_id: 'trace',
+        span_id: 'span',
+        start_timestamp: 1,
+        description: url,
+        data: { recipient: email },
+      }),
+    ).toMatchObject({
+      trace_id: 'trace',
+      span_id: 'span',
+      start_timestamp: 1,
+      description: 'https://example.test/?email=[email]',
+      data: { recipient: '[email]' },
+    })
+
+    expect(
+      options.beforeSendLog!({
+        level: 'warn',
+        message: `react@18.3.1 reported ${email}`,
+        attributes: { 'sentry.message.parameter.0': email, attempt: 2 },
+      }),
+    ).toEqual({
+      level: 'warn',
+      message: 'react@18.3.1 reported [email]',
+      attributes: { 'sentry.message.parameter.0': '[email]', attempt: 2 },
+    })
+  })
+})
