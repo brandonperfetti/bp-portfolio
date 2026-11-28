@@ -256,20 +256,25 @@ function drizzleOf(payload: unknown): CorvusEmbeddingsDb | null {
  * function is not guaranteed to run at all, and an awaited-but-bounded call
  * has a knowable worst case.
  *
- * **ONE deadline, for the sync and summary steps.** The bound above is a
- * property of the SAVE, not of each step, so a single
+ * **ONE deadline, for the sync and summary steps.** The bound above is
+ * shared by these steps, not given to each, so a single
  * {@link createDeadline} call is made once, after the draft-status read and
  * the unpublish delete (neither is under it: see `isDraftOverPublished`),
  * cancelled in a `finally`, and shared by the per-row sync and the summary
  * re-emit. Giving
- * the summary step a second, independent timeout would silently double a
- * `tech-stack` save's worst case while this docblock went on naming one
+ * the summary step a second, independent timeout would silently double the
+ * steps' worst case while this docblock went on naming one
  * constant. Each step gets the signal AND is raced against it through
  * {@link withDeadline}, because the signal alone only reaches `embedChunks` —
  * the drizzle statements and `refreshTechStackSummary`'s `payload.find` over
  * the whole collection take no signal, and on a slow database the `find` is
- * the likelier stall than the provider. So the worst case of a `tech-stack`
- * save is {@link HOOK_EMBEDDING_TIMEOUT_MS}, once, whatever the step count.
+ * the likelier stall than the provider. So these steps together wait at most
+ * {@link HOOK_EMBEDDING_TIMEOUT_MS}, once, whatever the step count.
+ *
+ * **The deadline does not bound the whole save (#461).** After a commit, the
+ * commit-status query in `corvusAfterCommit`, the flat collections' row guard
+ * and the read of the committed document also run before it starts. A database
+ * that stalls there holds the save response after the content is committed.
  *
  * @param collection - Which embedded collection this hook is wired onto.
  * @returns An `afterChange` hook.
@@ -386,7 +391,7 @@ export const refreshCorvusEmbeddings = (
       // read runs after the save commits.
       //
       // It shares `deadline` with the per-row sync above rather than starting
-      // its own: the bound is a property of the save, so whatever the per-row
+      // its own: the two steps have one budget, so whatever the per-row
       // step already spent comes out of this step's budget. Note the two
       // returns UPSTREAM of here — the autosave guard and the unpublish branch
       // — skip this step entirely. Inert today, because `tech-stack` is

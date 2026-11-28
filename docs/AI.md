@@ -687,7 +687,12 @@ while the provider is running. Less restrictive metadata and citation paths
 are applied by the post-commit refresh. A provider outage leaves the content
 save committed. The backfill repairs stale rows once the provider recovers.
 The save response waits for refreshes, which run one document at a time
-with an eight-second refresh deadline per document.
+with an eight-second refresh deadline per document. That deadline does not
+bound the whole save. After the commit, the commit-status query, the flat
+collections' row guard and the read of the committed document all run before
+it starts, as do the draft-status read and the delete for a Page or Post that
+is not published. A database that stalls there can hold the response after the
+content is saved. Bounding that work is #461.
 
 Corvus checks Post visibility and Page and Post publication dates separately
 from Payload's millisecond edit timestamp. For work history, a Postgres row
@@ -748,11 +753,13 @@ per-row sync, inside the same `try`, so a failure logs and leaves the _stale_
 summary rather than failing the save; `afterDelete` does the same, because a
 deleted technology can shrink the tier. **One deadline covers the whole hook**:
 a single `createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)` is shared by the per-row
-sync and the summary step, so a `tech-stack` save's worst case is that one
-budget however many steps run, and `withDeadline` extends it over the work an
+sync and the summary step, so those steps together wait at most that one
+budget however many run, and `withDeadline` extends it over the work an
 `AbortSignal` cannot reach by itself — the drizzle statements and the
 `payload.find` over the collection, which on a slow database is the likelier
-stall than the provider call. The ordinary save costs nothing — the
+stall than the provider call. The post-commit reads before the deadline are not
+under it, so it does not bound the whole save (see Freshness above, #461). The
+ordinary save costs nothing — the
 line of names is unchanged by a `notes` edit, so `isContentUnchanged`
 short-circuits before the provider. `scripts/backfill-corvus-embeddings.ts`
 carries one explicit step after the collection loop and is the **authority**:
