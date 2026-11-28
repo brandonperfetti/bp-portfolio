@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { Payload } from 'payload'
+
+import { installCorvusAfterCommit } from '@/hooks/corvusAfterCommit'
 
 /**
  * The seven hook non-negotiables (#82 research §3.7), one describe block each.
@@ -708,6 +711,74 @@ describe('8. re-emits the daily-driver summary on tech-stack writes (#165)', () 
       vi.useRealTimers()
     }
   })
+
+  it.each(['save', 'delete'] as const)(
+    'bounds post-commit summary guard acquisition on %s',
+    async (operation) => {
+      vi.useFakeTimers()
+      try {
+        syncDocumentEmbeddingsMock.mockResolvedValue(synced)
+        deleteDocumentEmbeddingsMock.mockResolvedValue(undefined)
+        const doc = { id: 9 }
+        const log = logger()
+        const revision = Promise.withResolvers<{
+          rows: { revision: string }[]
+        }>()
+        const acquireSummaryRevision = vi.fn(() => revision.promise)
+        const execute = vi
+          .fn()
+          .mockResolvedValueOnce({ rows: [{ status: 'committed' }] })
+        if (operation === 'save') {
+          execute.mockResolvedValueOnce({ rows: [{ revision: 'row' }] })
+        }
+        execute.mockImplementation(acquireSummaryRevision)
+        const payload = {
+          logger: log,
+          findByID: vi.fn().mockResolvedValue(doc),
+          db: {
+            drizzle: { execute },
+            sessions: {
+              tx: {
+                db: {
+                  execute: vi.fn().mockResolvedValue({ rows: [{ xid: '1' }] }),
+                },
+              },
+            },
+            commitTransaction: vi.fn().mockResolvedValue(undefined),
+            rollbackTransaction: vi.fn(),
+          },
+        }
+        installCorvusAfterCommit(payload as unknown as Payload)
+        const args = { doc, req: { payload, transactionID: 'tx' } }
+        if (operation === 'save') {
+          await refreshCorvusEmbeddings('tech-stack')(args as never)
+        } else {
+          await deleteCorvusEmbeddings('tech-stack')(args as never)
+        }
+
+        let committed = false
+        const pending = payload.db.commitTransaction('tx').then(() => {
+          committed = true
+        })
+        await vi.advanceTimersByTimeAsync(HOOK_EMBEDDING_TIMEOUT_MS - 1)
+        expect(acquireSummaryRevision).toHaveBeenCalledTimes(1)
+        expect(committed).toBe(false)
+
+        await vi.advanceTimersByTimeAsync(1)
+        expect(committed).toBe(true)
+        await pending
+        expect(log.error).toHaveBeenCalledWith(
+          expect.stringContaining('deadline of'),
+        )
+
+        revision.resolve({ rows: [{ revision: 'summary' }] })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(refreshTechStackSummaryMock).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    },
+  )
 
   it('FAILS OPEN: a throwing summary step does not fail the save', async () => {
     // The whole point of putting the step inside the existing `try`. A

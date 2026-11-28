@@ -394,12 +394,16 @@ export const refreshCorvusEmbeddings = (
       // drafts, the summary would stop refreshing on unpublish, which is the
       // same tier-shrinks direction the `afterDelete` mirror exists to cover.
       if (collection === SUMMARY_SOURCE_COLLECTION) {
+        const summaryDb = afterCommit
+          ? await withDeadline(
+              guardTechStackSummary(payload.db.drizzle),
+              deadline.signal,
+            )
+          : db
         await withDeadline(
           refreshTechStackSummary({
             payload,
-            db: afterCommit
-              ? await guardTechStackSummary(payload.db.drizzle)
-              : db,
+            db: summaryDb,
             req,
             abortSignal: deadline.signal,
           }),
@@ -541,12 +545,16 @@ export const deleteCorvusEmbeddings = (
       // returns no chunk and the sync DELETES the summary row rather than
       // embedding an empty tier — see `syncTechStackSummaryEmbeddings`.
       if (collection === SUMMARY_SOURCE_COLLECTION) {
+        const summaryDb = afterCommit
+          ? await withDeadline(
+              guardTechStackSummary(payload.db.drizzle),
+              deadline.signal,
+            )
+          : db
         await withDeadline(
           refreshTechStackSummary({
             payload,
-            db: afterCommit
-              ? await guardTechStackSummary(payload.db.drizzle)
-              : db,
+            db: summaryDb,
             req,
             abortSignal: deadline.signal,
           }),
