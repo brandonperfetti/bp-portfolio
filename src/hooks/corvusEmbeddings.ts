@@ -18,7 +18,7 @@ import {
 import {
   guardEmbeddingSource,
   guardTechStackSummary,
-  guardWorkHistoryRefresh,
+  guardFlatEmbeddingSource,
 } from '@/lib/ai/embeddingSourceGuard'
 import { refreshTechStackSummary } from '@/lib/ai/techStackSummarySync'
 import {
@@ -448,9 +448,13 @@ export const refreshCorvusEmbeddings = (
       `${collection}:${id}`,
       async () => {
         const guardedDb =
-          collection === 'work-history'
-            ? await guardWorkHistoryRefresh(req.payload.db.drizzle, id)
-            : undefined
+          collection === 'pages' || collection === 'posts'
+            ? undefined
+            : await guardFlatEmbeddingSource(
+                req.payload.db.drizzle,
+                collection,
+                id,
+              )
         if (guardedDb === null) return
         const current = await req.payload.findByID({
           collection,

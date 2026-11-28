@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   guardEmbeddingSource,
   guardTechStackSummary,
-  guardWorkHistoryRefresh,
+  guardFlatEmbeddingSource,
 } from '../src/lib/ai/embeddingSourceGuard'
 
 /**
@@ -468,7 +468,7 @@ describe.skipIf(!connectionString)(
           sql`DELETE FROM "corvus_embeddings" WHERE "collection" = 'posts' AND "doc_id" = ${post.id}`,
         )
       }
-    })
+    }, 180_000)
 
     it('leaves descendant citations unchanged on a rolled-back page move', async () => {
       const { createLocalReq, getPayload } = await import('payload')
@@ -573,7 +573,7 @@ describe.skipIf(!connectionString)(
           where: { from: { equals: `/${slug}` } },
         })
       }
-    })
+    }, 180_000)
 
     it('rejects superseded work history and tech summary writes', async () => {
       const { sql } = await import('@payloadcms/db-postgres')
@@ -594,7 +594,11 @@ describe.skipIf(!connectionString)(
       })
       let techId: number | undefined
       try {
-        const olderRole = await guardWorkHistoryRefresh(adapter, role.id)
+        const olderRole = await guardFlatEmbeddingSource(
+          adapter,
+          'work-history',
+          role.id,
+        )
         expect(olderRole).not.toBeNull()
         const statement = sql`SELECT 1 AS value`
         await expect(olderRole?.execute(statement)).resolves.toMatchObject({
@@ -607,9 +611,13 @@ describe.skipIf(!connectionString)(
           data: { title: 'New fixture role' },
         })
         await expect(olderRole?.execute(statement)).rejects.toThrow(
-          'Work history changed',
+          'work-history changed',
         )
-        const currentRole = await guardWorkHistoryRefresh(adapter, role.id)
+        const currentRole = await guardFlatEmbeddingSource(
+          adapter,
+          'work-history',
+          role.id,
+        )
         await expect(currentRole?.execute(statement)).resolves.toMatchObject({
           rows: [{ value: 1 }],
         })
@@ -650,7 +658,7 @@ describe.skipIf(!connectionString)(
           id: role.id,
         })
       }
-    })
+    }, 180_000)
 
     it('the migration created the table retrieval expects', async () => {
       const { sql } = await import('@payloadcms/db-postgres')

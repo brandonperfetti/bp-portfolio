@@ -60,17 +60,26 @@ export function guardEmbeddingSource(
 
 type Drizzle = PostgresAdapter['drizzle']
 
+const flatSourceTables = {
+  projects: 'projects',
+  uses: 'uses',
+  'tech-stack': 'tech_stack',
+  'work-history': 'work_history',
+} as const
+
 /**
- * Captures a work-history row's write identity before the caller reads it.
+ * Captures a flat collection row's write identity before the caller reads it.
  * Checking the tuple again under a row lock makes stale provider results
  * harmless across workers and independently of timestamp precision.
  */
-export async function guardWorkHistoryRefresh(
+export async function guardFlatEmbeddingSource(
   db: Drizzle,
+  collection: keyof typeof flatSourceTables,
   id: number,
 ): Promise<CorvusEmbeddingsDb | null> {
+  const table = sql.identifier(flatSourceTables[collection])
   const result = await db.execute(
-    sql`SELECT xmin::text AS revision FROM "work_history" WHERE "id" = ${id}`,
+    sql`SELECT xmin::text AS revision FROM ${table} WHERE "id" = ${id}`,
   )
   const revision = result.rows[0]?.revision
   if (typeof revision !== 'string') return null
@@ -78,12 +87,12 @@ export async function guardWorkHistoryRefresh(
     execute: (statement) =>
       db.transaction(async (tx) => {
         const current = await tx.execute(sql`
-          SELECT "id" FROM "work_history"
+          SELECT "id" FROM ${table}
           WHERE "id" = ${id} AND xmin::text = ${revision}
           FOR SHARE
         `)
         if (current.rows.length !== 1)
-          throw new Error('Work history changed during Corvus refresh')
+          throw new Error(`${collection} changed during Corvus refresh`)
         return tx.execute(statement as ReturnType<typeof sql>)
       }),
   }

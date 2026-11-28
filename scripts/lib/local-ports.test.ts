@@ -130,9 +130,16 @@ describe('assertPortFree', () => {
 
   /** Hold an ephemeral loopback port, as another project's server would. */
   async function hold(host: string) {
-    holder = net.createServer()
-    await new Promise<void>((resolve) => holder!.listen(0, host, resolve))
-    return (holder.address() as net.AddressInfo).port
+    const server = net.createServer()
+    holder = server
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, host, () => {
+        server.off('error', reject)
+        resolve()
+      })
+    })
+    return (server.address() as net.AddressInfo).port
   }
 
   it('fails clearly when the IPv4 loopback port is taken', async () => {
@@ -144,10 +151,20 @@ describe('assertPortFree', () => {
     )
   })
 
-  it('fails clearly when only the IPv6 loopback holds the port', async () => {
+  it('fails clearly when only the IPv6 loopback holds the port', async ({
+    skip,
+  }) => {
     // A server bound to `localhost` on macOS takes `::1`; the `::` wildcard
     // probe alone would not see it.
-    const port = await hold('::1')
+    let port: number
+    try {
+      port = await hold('::1')
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code !== 'EADDRNOTAVAIL' && code !== 'EAFNOSUPPORT') throw error
+      skip('IPv6 loopback is unavailable on this host')
+      return
+    }
     await expect(assertPortFree('dev', port)).rejects.toThrow(
       new RegExp(
         `^Port ${port} for BP Portfolio's dev server is not available on ::1 `,

@@ -478,7 +478,13 @@ function fakeSite({
         return reply(`Resource created successfully!${fence(doc)}`)
       }
       if (name.startsWith('find') && args.id === undefined) {
-        const found = probeDocs(kind)
+        const where = JSON.parse(args.where)
+        const found = where.id
+          ? [...docs.values()].filter(
+              (doc) =>
+                doc.kind === kind && String(doc.id) === String(where.id.equals),
+            )
+          : probeDocs(kind)
         return reply(
           `Collection: "x"\nTotal: ${found.length} documents\nPage: 1 of 1\n${found.map(fence).join('')}`,
         )
@@ -606,7 +612,9 @@ describe('runProbe', () => {
     expect(result.cleanup).toBe('PASS')
     expect(exitCodeFor(result)).toBe(EXIT.fail)
     expect(site.docs.size).toBe(0)
-    expect(lines.some((l) => /cleanup +page \d+ gone/.test(l))).toBe(true)
+    expect(
+      lines.some((l) => /cleanup +page \d+ absence confirmed by API/.test(l)),
+    ).toBe(true)
   })
 
   it('counts a page still served after its delete as a removal FAIL, not a leftover', async () => {
@@ -952,6 +960,42 @@ describe('exitCodeFor', () => {
         error: 'evidence write failed',
       }),
     ).toBe(EXIT.fail)
+  })
+})
+
+describe('MCP cleanup verification', () => {
+  it('requires a successful ID-filtered empty read before reporting absence', async () => {
+    const replies = [
+      'Error: Document with ID "101" not found in collection "pages"',
+      'Malformed but otherwise successful reply',
+      'Collection: "pages"\nTotal: 0 documents\nPage: 1 of 1\n',
+    ]
+    const fetch: typeof globalThis.fetch = async (_url, init) => {
+      const request = JSON.parse(String(init?.body))
+      expect(request.params.name).toBe('findPages')
+      const { id, where, draft } = request.params.arguments
+      expect(id).toBeUndefined()
+      expect(JSON.parse(where)).toEqual({ id: { equals: 101 } })
+      expect(draft).toBe(true)
+      return new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: request.id,
+          result: { content: [{ type: 'text', text: replies.shift() }] },
+        }),
+      )
+    }
+    const writer = await createMcpWriter({
+      base: 'https://site.test',
+      fetch,
+      extraHeaders: {},
+      apiKey: SECRET_KEY,
+    })
+    await expect(writer.exists('page', 101)).rejects.toThrow('not found')
+    await expect(writer.exists('page', 101)).rejects.toThrow(
+      'could not verify document absence',
+    )
+    await expect(writer.exists('page', 101)).resolves.toBe(false)
   })
 })
 

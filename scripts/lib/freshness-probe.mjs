@@ -774,12 +774,24 @@ export async function createMcpWriter({
     /** @type {'page' | 'post'} */ kind,
     /** @type {number | string} */ id,
   ) => {
-    const r = await tool(toolName('find', kind), { id, draft: true, depth: 0 })
-    if (/^Error: Document with ID .* not found/.test(r.text.trim()))
+    const name = toolName('find', kind)
+    const text = await must(name, {
+      where: JSON.stringify({ id: { equals: id } }),
+      draft: true,
+      depth: 0,
+      limit: 1,
+    })
+    const docs = mcpDocs(text)
+    if (docs.length === 1 && String(docs[0]?.id) === String(id)) return true
+    // By-ID reads in plugin-mcp use the same "not found" reply for
+    // database failures. Only a successful, empty collection read proves
+    // the cleanup finished.
+    if (
+      docs.length === 0 &&
+      /^Collection: "[^"]+"\r?\nTotal: 0 documents\r?\n/.test(text)
+    )
       return false
-    if (r.isError)
-      throw new Error(`${toolName('find', kind)}: ${excerpt(r.text, 200)}`)
-    return true
+    throw new Error(`${name}: could not verify document absence`)
   }
   return {
     async create(kind, data) {
@@ -1433,7 +1445,7 @@ export async function runProbe({
         if (!deleted && attempt < 3) await wait(2000)
       }
       log(
-        `${at()}  cleanup    ${p.kind} ${p.id} ${deleted ? 'gone (API 404)' : 'STILL PRESENT'}`,
+        `${at()}  cleanup    ${p.kind} ${p.id} ${deleted ? 'absence confirmed by API' : 'ABSENCE UNVERIFIED'}`,
       )
       if (deleted) confirmedDeleted.add(p.kind)
       else ok = false
