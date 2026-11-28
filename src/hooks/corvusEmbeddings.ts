@@ -337,7 +337,7 @@ export const refreshCorvusEmbeddings = (
         return doc
       }
 
-      // ONE deadline for the whole hook, created here and shared by every
+      // ONE deadline, created here and shared by every timed
       // step below — see the docblock. `withDeadline` is what extends it over
       // the work the signal cannot reach (drizzle statements; the summary's
       // `find`); the signal itself is still passed in so the provider call
@@ -375,7 +375,7 @@ export const refreshCorvusEmbeddings = (
       // - After, because the summary is a view of the collection this save
       //   just changed; composing it first would embed the previous tier.
       // - Inside, and NOT in a second try/catch of its own, because this
-      //   hook's whole contract is that it never throws. A failure to rebuild
+      //   hook's refresh work is fail-open. A failure to rebuild
       //   the summary therefore lands in the `catch` below, logs, and leaves
       //   the STALE summary row in place — a content save can never fail on
       //   it, and the backfill is the repair path exactly as it is for every
@@ -499,14 +499,18 @@ export const refreshCorvusEmbeddings = (
 /**
  * afterDelete companion to {@link refreshCorvusEmbeddings}.
  *
- * @remarks Same never-throw contract, for the same reason: a failure here must
- * not fail the delete. The asymmetry with the afterChange path is that a
+ * @remarks The refresh work never throws, for the same reason: its failure must
+ * not fail the delete. The row delete of a transactional delete is different: it
+ * runs on the content transaction, so its error fails the delete. The asymmetry with the afterChange path is that a
  * failed delete leaves content in the index that no longer exists on the site,
  * so it logs at error level and names the repair path explicitly.
  *
- * Also one deadline for the whole hook, for the reason
- * {@link refreshCorvusEmbeddings} gives: the summary re-emit shares the delete's
- * own {@link HOOK_EMBEDDING_TIMEOUT_MS} rather than starting a second one.
+ * The deadline's scope depends on the path. With no transaction, the row delete
+ * and the summary re-emit share one {@link HOOK_EMBEDDING_TIMEOUT_MS}, for the
+ * reason {@link refreshCorvusEmbeddings} gives. In a transaction, the row delete
+ * runs before the commit with no deadline, and only the `tech-stack` summary
+ * has one, started after the commit-status query. Neither bounds the whole
+ * delete (#461).
  *
  * @param collection - Which embedded collection this hook is wired onto.
  * @returns An `afterDelete` hook.
@@ -529,7 +533,8 @@ export const deleteCorvusEmbeddings = (
       const docId = Number((doc as HookDoc)?.id)
       if (!Number.isFinite(docId)) return doc
 
-      // One deadline for this hook too, shared by the delete and the re-emit.
+      // One deadline for the steps below: the re-emit, and the row delete when
+      // there was no transaction to run it in.
       deadline = createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)
 
       if (!afterCommit) {

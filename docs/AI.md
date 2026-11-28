@@ -690,9 +690,11 @@ The save response waits for refreshes, which run one document at a time
 with an eight-second refresh deadline per document. That deadline does not
 bound the whole save. After the commit, the commit-status query, the flat
 collections' row guard and the read of the committed document all run before
-it starts, as do the draft-status read and the delete for a Page or Post that
-is not published. A database that stalls there can hold the response after the
-content is saved. Bounding that work is #461.
+it starts, as do the draft-status read and the published-to-unpublished delete
+for a Page or Post. A database that stalls there can hold the response after
+the content is saved. Work done before the commit is not under it either. A
+write with no transaction has no post-commit work, but its draft-status read
+and unpublish delete still precede the deadline. Bounding that work is #461.
 
 Corvus checks Post visibility and Page and Post publication dates separately
 from Payload's millisecond edit timestamp. For work history, a Postgres row
@@ -751,15 +753,16 @@ nothing here collides with #167's routing.
 **Who refreshes it.** The `tech-stack` `afterChange` hook re-emits it after the
 per-row sync, inside the same `try`, so a failure logs and leaves the _stale_
 summary rather than failing the save; `afterDelete` does the same, because a
-deleted technology can shrink the tier. **One deadline covers the whole hook**:
-a single `createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)` is shared by the per-row
-sync and the summary step, so those steps together wait at most that one
+deleted technology can shrink the tier. **One deadline covers the timed steps**:
+on a save, a single `createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)` is shared by the
+per-row sync and the summary step, so those steps together wait at most that one
 budget however many run, and `withDeadline` extends it over the work an
 `AbortSignal` cannot reach by itself — the drizzle statements and the
 `payload.find` over the collection, which on a slow database is the likelier
 stall than the provider call. The post-commit reads before the deadline are not
 under it, so it does not bound the whole save (see Freshness above, #461). The
-ordinary save costs nothing — the
+row delete of a transactional delete runs before its commit, outside the
+deadline, and only the summary is timed. The ordinary save costs nothing — the
 line of names is unchanged by a `notes` edit, so `isContentUnchanged`
 short-circuits before the provider. `scripts/backfill-corvus-embeddings.ts`
 carries one explicit step after the collection loop and is the **authority**:
