@@ -689,6 +689,12 @@ save committed. The backfill repairs stale rows once the provider recovers.
 The save response waits for refreshes, which run one document at a time
 with an eight-second refresh deadline per document.
 
+Corvus checks Post visibility and Page and Post publication dates separately
+from Payload's millisecond edit timestamp. For work history, a Postgres row
+revision prevents an older refresh from replacing a newer edit. The daily
+driver summary checks the revisions of the technology rows it represents
+before storing the summary, including rows that were added or removed.
+
 Two skip paths, and the second one is a security fix, not an optimisation:
 
 1. **`content_hash` skip.** Every chunk's sha256 is stored. If the freshly

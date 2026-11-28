@@ -3,6 +3,12 @@ import { createRequire } from 'node:module'
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import {
+  guardEmbeddingSource,
+  guardTechStackSummary,
+  guardWorkHistoryRefresh,
+} from '../src/lib/ai/embeddingSourceGuard'
+
 /**
  * Corvus retrieval against REAL Postgres + pgvector (#82, eval tier 2).
  *
@@ -403,6 +409,26 @@ describe.skipIf(!connectionString)(
         expect((await stored()).size).toBeGreaterThan(0)
         expect(embedChunksStub).toHaveBeenCalledTimes(1)
 
+        const publicSnapshot = await payload.findByID({
+          collection: 'posts',
+          id: post.id,
+          draft: false,
+        })
+        // Emulate two writes sharing Payload's millisecond timestamp, without
+        // depending on timing or triggering the next refresh.
+        await db.execute(sql`UPDATE "posts" SET "access_visibility" = 'gated'
+          WHERE "id" = ${post.id}`)
+        try {
+          await expect(
+            guardEmbeddingSource(payload.db.drizzle, 'posts', {
+              ...publicSnapshot,
+            }).execute(sql`SELECT 1`),
+          ).rejects.toThrow('Embedding snapshot changed')
+        } finally {
+          await db.execute(sql`UPDATE "posts" SET "access_visibility" = 'public'
+            WHERE "id" = ${post.id}`)
+        }
+
         // A provider failure is outside the transaction and cannot undo
         // the newer published title or change the operation into an error.
         let gateBeforeProvider: string[] = []
@@ -544,7 +570,84 @@ describe.skipIf(!connectionString)(
         await payload.delete({ collection: 'pages', id: page.id })
         await payload.delete({
           collection: 'redirects',
-          where: { from: { like: `%${slug}%` } },
+          where: { from: { equals: `/${slug}` } },
+        })
+      }
+    })
+
+    it('rejects superseded work history and tech summary writes', async () => {
+      const { sql } = await import('@payloadcms/db-postgres')
+      const { getPayload } = await import('payload')
+      const { default: config } = await import('../src/payload.config')
+      const payload = await getPayload({ config })
+      const adapter = payload.db.drizzle
+      const context = { disableRevalidate: true }
+      const role = await payload.create({
+        collection: 'work-history',
+        context,
+        data: {
+          company: 'Corvus PG revision fixture',
+          slug: 'zz-corvus-pg-revision-fixture',
+          startDate: '2025-01-01',
+          title: 'Fixture role',
+        },
+      })
+      let techId: number | undefined
+      try {
+        const olderRole = await guardWorkHistoryRefresh(adapter, role.id)
+        expect(olderRole).not.toBeNull()
+        const statement = sql`SELECT 1 AS value`
+        await expect(olderRole?.execute(statement)).resolves.toMatchObject({
+          rows: [{ value: 1 }],
+        })
+        await payload.update({
+          collection: 'work-history',
+          id: role.id,
+          context,
+          data: { title: 'New fixture role' },
+        })
+        await expect(olderRole?.execute(statement)).rejects.toThrow(
+          'Work history changed',
+        )
+        const currentRole = await guardWorkHistoryRefresh(adapter, role.id)
+        await expect(currentRole?.execute(statement)).resolves.toMatchObject({
+          rows: [{ value: 1 }],
+        })
+
+        const beforeInsert = await guardTechStackSummary(adapter)
+        const tech = await payload.create({
+          collection: 'tech-stack',
+          context,
+          data: {
+            name: 'Corvus PG revision fixture',
+            category: 'tooling',
+            proficiency: 'daily',
+          },
+        })
+        techId = tech.id
+        await expect(beforeInsert.execute(statement)).rejects.toThrow(
+          'Tech stack changed',
+        )
+        const currentSummary = await guardTechStackSummary(adapter)
+        await expect(currentSummary.execute(statement)).resolves.toMatchObject({
+          rows: [{ value: 1 }],
+        })
+        await payload.delete({ collection: 'tech-stack', context, id: tech.id })
+        techId = undefined
+        await expect(currentSummary.execute(statement)).rejects.toThrow(
+          'Tech stack changed',
+        )
+      } finally {
+        if (techId !== undefined)
+          await payload.delete({
+            collection: 'tech-stack',
+            context,
+            id: techId,
+          })
+        await payload.delete({
+          collection: 'work-history',
+          context,
+          id: role.id,
         })
       }
     })

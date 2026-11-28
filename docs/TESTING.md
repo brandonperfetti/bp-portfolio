@@ -189,9 +189,9 @@ collection). With the token set, `src/payload.config.ts` turns on Vercel Blob
 storage and the seed uploads to that store instead, and a set
 `STORAGE_VERCEL_BLOB_BASE_URL` refuses tokenless uploads. The recipe exports
 both as empty strings, because `payload run` loads `.env` files and fills any
-name that is unset, but leaves a name that is set (even to empty) alone. `/media/` is in
-`.gitignore`, so a seeded checkout keeps a clean `git status`; delete the folder
-when you are done with the seed.
+name that is unset, but leaves a name that is set (even to empty) alone. Run
+this recipe in a disposable checkout with no existing local uploads. The
+seeded `media/` files are ignored by Git.
 
 ## CI (`.github/workflows/ci.yml`)
 

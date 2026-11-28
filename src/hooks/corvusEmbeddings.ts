@@ -15,7 +15,11 @@ import {
   syncDocumentEmbeddings,
   tightenEmbeddingAccess,
 } from '@/lib/ai/embeddingsStore'
-import { guardEmbeddingSource } from '@/lib/ai/embeddingSourceGuard'
+import {
+  guardEmbeddingSource,
+  guardTechStackSummary,
+  guardWorkHistoryRefresh,
+} from '@/lib/ai/embeddingSourceGuard'
 import { refreshTechStackSummary } from '@/lib/ai/techStackSummarySync'
 import {
   type Deadline,
@@ -276,6 +280,7 @@ export const refreshCorvusEmbeddings = (
   const refresh = async (
     { doc, previousDoc, req }: Parameters<CollectionAfterChangeHook>[0],
     afterCommit = false,
+    guardedDb?: CorvusEmbeddingsDb,
   ) => {
     const { payload, context } = req
     if (context?.disableRevalidate) return doc
@@ -289,7 +294,7 @@ export const refreshCorvusEmbeddings = (
       const db =
         afterCommit && (collection === 'pages' || collection === 'posts')
           ? guardEmbeddingSource(payload.db.drizzle, collection, current)
-          : drizzleOf(payload)
+          : (guardedDb ?? drizzleOf(payload))
       if (!db) return doc
 
       const previous = previousDoc as HookDoc | undefined
@@ -392,7 +397,9 @@ export const refreshCorvusEmbeddings = (
         await withDeadline(
           refreshTechStackSummary({
             payload,
-            db,
+            db: afterCommit
+              ? await guardTechStackSummary(payload.db.drizzle)
+              : db,
             req,
             abortSignal: deadline.signal,
           }),
@@ -440,6 +447,11 @@ export const refreshCorvusEmbeddings = (
       req,
       `${collection}:${id}`,
       async () => {
+        const guardedDb =
+          collection === 'work-history'
+            ? await guardWorkHistoryRefresh(req.payload.db.drizzle, id)
+            : undefined
+        if (guardedDb === null) return
         const current = await req.payload.findByID({
           collection,
           id,
@@ -460,7 +472,11 @@ export const refreshCorvusEmbeddings = (
           })
           return
         }
-        await refresh({ ...args, doc: current, req: committedReq }, true)
+        await refresh(
+          { ...args, doc: current, req: committedReq },
+          true,
+          guardedDb,
+        )
       },
     )
     return queued ? doc : refresh(args)
@@ -485,7 +501,10 @@ export const refreshCorvusEmbeddings = (
 export const deleteCorvusEmbeddings = (
   collection: CorvusCollectionSlug,
 ): CollectionAfterDeleteHook => {
-  const remove: CollectionAfterDeleteHook = async ({ doc, req }) => {
+  const remove = async (
+    { doc, req }: Parameters<CollectionAfterDeleteHook>[0],
+    afterCommit = false,
+  ) => {
     const { payload, context } = req
     if (context?.disableRevalidate) return doc
 
@@ -500,13 +519,15 @@ export const deleteCorvusEmbeddings = (
       // One deadline for this hook too, shared by the delete and the re-emit.
       deadline = createDeadline(HOOK_EMBEDDING_TIMEOUT_MS)
 
-      await withDeadline(
-        deleteDocumentEmbeddings(db, collection, docId),
-        deadline.signal,
-      )
-      payload.logger.info(
-        `[corvus] embeddings deleted for ${collection}#${docId}`,
-      )
+      if (!afterCommit) {
+        await withDeadline(
+          deleteDocumentEmbeddings(db, collection, docId),
+          deadline.signal,
+        )
+        payload.logger.info(
+          `[corvus] embeddings deleted for ${collection}#${docId}`,
+        )
+      }
 
       // #165 — a deleted technology can SHRINK the daily-driver tier, and a
       // summary that still names it is worse than a stale one: Corvus would
@@ -519,7 +540,9 @@ export const deleteCorvusEmbeddings = (
         await withDeadline(
           refreshTechStackSummary({
             payload,
-            db,
+            db: afterCommit
+              ? await guardTechStackSummary(payload.db.drizzle)
+              : db,
             req,
             abortSignal: deadline.signal,
           }),
@@ -563,7 +586,7 @@ export const deleteCorvusEmbeddings = (
       req,
       `${collection}:${id}`,
       async () => {
-        await remove({ ...args, req: committedReq })
+        await remove({ ...args, req: committedReq }, true)
       },
     )
     return queued ? doc : remove(args)

@@ -364,6 +364,9 @@ describe('cascadePagePaths', () => {
         previousStoredPaths: { 'pages:1': 'work' },
       } as Record<string, unknown>,
       payload: {
+        db: {
+          findOne: vi.fn(async () => ({ path: 'work', _status: 'published' })),
+        },
         find: vi.fn(async ({ collection }: { collection: string }) => ({
           docs: docs.filter((doc) => doc.collection === collection),
         })),
@@ -547,7 +550,7 @@ describe('cascadePagePaths', () => {
 
   it('does nothing when the path did not move', async () => {
     const { req, updates } = harness()
-    await move(req, {}, { id: 1, path: 'work' })
+    await move(req, {}, { id: 1, path: 'work', _status: 'published' })
 
     expect(updates).toHaveLength(0)
     expect(req.payload.find).not.toHaveBeenCalled()

@@ -693,115 +693,150 @@ describe.skipIf(!connectionString)(
      *
      * Same leaf-first `try/finally` as the #150 case above.
      */
-    it('cascades a never-published parent’s move on its FIRST publish', async () => {
-      const created: { collection: 'pages' | 'posts'; id: number | string }[] =
-        []
-      const track = <T extends { id: number | string }>(
-        collection: 'pages' | 'posts',
-        doc: T,
-      ): T => {
-        created.unshift({ collection, id: doc.id })
-        return doc
-      }
-
-      try {
-        // NEVER published: created straight as a draft, so no row ever matches
-        // `_status: 'published'` for this id.
-        const section = track(
-          'pages',
-          await createFixturePage(payload, {
-            data: {
-              title: `${MARKER}-np`,
-              layout,
-              _status: 'draft',
-              slug: `${MARKER}-np`,
-            },
-          }),
-        )
-        expect(section.path).toBe(`${MARKER}-np`)
-
-        // Descendants at two depths, so the shallowest-first recomposition is
-        // exercised on this branch too. Drafts, because #180 refuses a
-        // published child under an unpublished parent — see this case's
-        // docblock for why that costs the case nothing.
-        const child = track(
-          'pages',
-          await mkDraftPage(`${MARKER}-np-child`, section.id),
-        )
-        expect(child.path).toBe(`${MARKER}-np/${MARKER}-np-child`)
-        const leaf = track(
-          'pages',
-          await mkDraftPage(`${MARKER}-np-leaf`, child.id),
-        )
-        expect(leaf.path).toBe(
-          `${MARKER}-np/${MARKER}-np-child/${MARKER}-np-leaf`,
-        )
-
-        // The rename arrives as a DRAFT save, exactly as the admin sends it.
-        await payload.update({
-          collection: 'pages',
-          id: section.id,
-          overrideAccess: true,
-          draft: true,
-          data: { slug: `${MARKER}-np-renamed`, slugLock: false },
-        })
-
-        // MEASURED, not assumed: the draft save left the main table alone, so
-        // the row still carries the prefix the descendants were composed from.
-        const mainAfterDraft = await payload.findByID({
-          collection: 'pages',
-          id: section.id,
-          overrideAccess: true,
-        })
-        expect(mainAfterDraft.path).toBe(`${MARKER}-np`)
-
-        // FIRST publish. The main row moves here, for the first time.
-        const published = await payload.update({
-          collection: 'pages',
-          id: section.id,
-          overrideAccess: true,
-          data: { _status: 'published' },
-        })
-        expect(published.path).toBe(`${MARKER}-np-renamed`)
-
-        const pathOf = async (
+    it.each(['first publish', 'draft main-row update'])(
+      'cascades a never-published parent’s move on %s',
+      async (moveOn) => {
+        const created: {
+          collection: 'pages' | 'posts'
+          id: number | string
+        }[] = []
+        const track = <T extends { id: number | string }>(
           collection: 'pages' | 'posts',
-          id: number | string,
-        ) =>
-          (await payload.findByID({ collection, id, overrideAccess: true }))
-            .path
+          doc: T,
+        ): T => {
+          created.unshift({ collection, id: doc.id })
+          return doc
+        }
 
-        // The STORED paths, read back. Without the cascade these are still
-        // `${MARKER}-np/…` and stay that way until each document's own next
-        // save.
-        expect(await pathOf('pages', child.id)).toBe(
-          `${MARKER}-np-renamed/${MARKER}-np-child`,
-        )
-        expect(await pathOf('pages', leaf.id)).toBe(
-          `${MARKER}-np-renamed/${MARKER}-np-child/${MARKER}-np-leaf`,
-        )
+        try {
+          // NEVER published: created straight as a draft, so no row ever matches
+          // `_status: 'published'` for this id.
+          const section = track(
+            'pages',
+            await createFixturePage(payload, {
+              data: {
+                title: `${MARKER}-np`,
+                layout,
+                _status: 'draft',
+                slug: `${MARKER}-np`,
+              },
+            }),
+          )
+          expect(section.path).toBe(`${MARKER}-np`)
 
-        // No redirect row for the parent itself, and that is correct: it was
-        // never served, so there is no old URL to send anywhere. The
-        // descendants' old URLs are the residual documented in `docs/PAYLOAD.md`.
-        const own = await payload.find({
-          collection: 'redirects',
-          depth: 0,
-          overrideAccess: true,
-          pagination: false,
-          where: { from: { equals: `/${MARKER}-np` } },
-        })
-        expect(own.totalDocs).toBe(0)
-      } finally {
-        for (const row of created) {
-          await payload.delete({
-            collection: row.collection,
-            where: { id: { equals: row.id } },
+          // Descendants at two depths, so the shallowest-first recomposition is
+          // exercised on this branch too. Drafts, because #180 refuses a
+          // published child under an unpublished parent — see this case's
+          // docblock for why that costs the case nothing.
+          const child = track(
+            'pages',
+            await mkDraftPage(`${MARKER}-np-child`, section.id),
+          )
+          expect(child.path).toBe(`${MARKER}-np/${MARKER}-np-child`)
+          const leaf = track(
+            'pages',
+            await mkDraftPage(`${MARKER}-np-leaf`, child.id),
+          )
+          expect(leaf.path).toBe(
+            `${MARKER}-np/${MARKER}-np-child/${MARKER}-np-leaf`,
+          )
+
+          // The rename arrives as a DRAFT save, exactly as the admin sends it.
+          await payload.update({
+            collection: 'pages',
+            id: section.id,
+            overrideAccess: true,
+            draft: true,
+            data: { slug: `${MARKER}-np-renamed`, slugLock: false },
+          })
+
+          // MEASURED, not assumed: the draft save left the main table alone, so
+          // the row still carries the prefix the descendants were composed from.
+          const mainAfterDraft = await payload.findByID({
+            collection: 'pages',
+            id: section.id,
             overrideAccess: true,
           })
+          expect(mainAfterDraft.path).toBe(`${MARKER}-np`)
+
+          if (moveOn === 'draft main-row update') {
+            // A regular Local API update persists the draft's path on the main
+            // row, before any publish. The descendant main rows must follow it.
+            const moved = await payload.update({
+              collection: 'pages',
+              id: section.id,
+              overrideAccess: true,
+              data: { slug: `${MARKER}-np-renamed`, slugLock: false },
+            })
+            expect(moved._status).toBe('draft')
+            expect(moved.path).toBe(`${MARKER}-np-renamed`)
+            for (const [id, path] of [
+              [child.id, `${MARKER}-np-renamed/${MARKER}-np-child`],
+              [
+                leaf.id,
+                `${MARKER}-np-renamed/${MARKER}-np-child/${MARKER}-np-leaf`,
+              ],
+            ] as const) {
+              const persisted = await payload.findByID({
+                collection: 'pages',
+                id,
+                overrideAccess: true,
+                draft: false,
+              })
+              expect(persisted.path).toBe(path)
+              expect(persisted._status).toBe('draft')
+            }
+          }
+
+          // Publish the draft with the renamed path.
+          const published = await payload.update({
+            collection: 'pages',
+            id: section.id,
+            overrideAccess: true,
+            data: { _status: 'published' },
+          })
+          expect(published.path).toBe(`${MARKER}-np-renamed`)
+
+          const pathOf = async (
+            collection: 'pages' | 'posts',
+            id: number | string,
+          ) =>
+            (await payload.findByID({ collection, id, overrideAccess: true }))
+              .path
+
+          // The STORED paths, read back. Without the cascade these are still
+          // `${MARKER}-np/…` and stay that way until each document's own next
+          // save.
+          expect(await pathOf('pages', child.id)).toBe(
+            `${MARKER}-np-renamed/${MARKER}-np-child`,
+          )
+          expect(await pathOf('pages', leaf.id)).toBe(
+            `${MARKER}-np-renamed/${MARKER}-np-child/${MARKER}-np-leaf`,
+          )
+
+          // No redirect row for the parent itself, and that is correct: it was
+          // never served, so there is no old URL to send anywhere. The
+          // descendants' old URLs are the residual documented in `docs/PAYLOAD.md`.
+          const own = await payload.find({
+            collection: 'redirects',
+            depth: 0,
+            overrideAccess: true,
+            pagination: false,
+            where: { from: { equals: `/${MARKER}-np` } },
+          })
+          expect(own.totalDocs).toBe(0)
+        } finally {
+          for (const row of created) {
+            await payload.delete({
+              collection: row.collection,
+              where: { id: { equals: row.id } },
+              overrideAccess: true,
+            })
+          }
         }
-      }
-    }, 180_000)
+      },
+      180_000,
+    )
 
     /**
      * The served-prefix invariant at publish (#180), on the real pipeline.
