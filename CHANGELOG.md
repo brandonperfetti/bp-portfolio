@@ -12,12 +12,12 @@ Each version is an annotated tag on that release's merge commit.
 here; each one's release PR body is its record. How an entry is written and
 when the tag is made: [`docs/WORKFLOW.md` § Releases](docs/WORKFLOW.md#releases).
 
-## v2026.11.27
+## v2026.11.28
 
 Automatic Analytics grants now stay in memory, and the site improves
 CMS reads, article navigation and Corvus context.
 Release PR [#486](https://github.com/brandonperfetti/bp-portfolio/pull/486) ·
-[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.27).
+[tag](https://github.com/brandonperfetti/bp-portfolio/releases/tag/v2026.11.28).
 
 **Visitors**
 
