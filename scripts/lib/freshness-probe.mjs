@@ -1067,7 +1067,9 @@ export async function runProbe({
     const url = `${plan.base}${path}`
     const at = utc()
     let status = 'ERR'
-    let headers = /** @type {Record<string, string>} */ ({})
+    const headers = Object.fromEntries(
+      RECORDED_HEADERS.map((name) => [name, '']),
+    )
     let body = ''
     try {
       const res = await fetch(url, {

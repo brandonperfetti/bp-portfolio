@@ -531,7 +531,7 @@ async function run(
     '3',
     ...extra,
   ])
-  const evidence = createEvidence(dir)
+  const evidence = createEvidence(dir, [SECRET_PASSWORD, SECRET_KEY])
   patchEvidence?.(evidence)
   const common = { base: p.base, fetch: site.fetch, extraHeaders: {} }
   const writer =
@@ -825,6 +825,24 @@ describe('runProbe', () => {
       /function read was unavailable \(ERR\)/,
     )
     expect(result.llms.join(' ')).not.toMatch(/lacks/)
+  })
+
+  it('records a rejected fetch even without response headers', async () => {
+    const base = fakeSite()
+    const site = {
+      ...base,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (new URL(String(input)).pathname === '/llms.txt')
+          throw new Error(`fixture failure: ${SECRET_PASSWORD}`)
+        return base.fetch(input, init)
+      }) as typeof fetch,
+    }
+    const { result, dir } = await run('rest', site, ['--article'])
+    const receipt = readFileSync(join(dir, 'reads.tsv'), 'utf8')
+    expect(result.error).toBeNull()
+    expect(receipt).toMatch(/\/llms\.txt\tERR\t/)
+    expect(allFiles(dir).join('\n')).toContain('fixture failure: [redacted]')
+    expect(allFiles(dir).join('\n')).not.toContain(SECRET_PASSWORD)
   })
 
   it('reports a failed /llms.txt read as unavailable, not as lacking the article', async () => {
